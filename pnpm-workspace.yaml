@@ -1,0 +1,14 @@
+packages:
+  - 'apps/*'
+  - 'apps/agents/*'
+  - 'packages/*'
+
+allowBuilds:
+  esbuild: set this to true or false
+  msgpackr-extract: set this to true or false
+  sharp: true
+  unrs-resolver: true
+
+onlyBuiltDependencies:
+  - esbuild
+  - msgpackr-extract

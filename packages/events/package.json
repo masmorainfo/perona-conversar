@@ -1,0 +1,19 @@
+{
+  "name": "@cos/events",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@cos/types": "workspace:*",
+    "bullmq": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

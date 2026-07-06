@@ -1,0 +1,122 @@
+{
+  "name": "template/sports",
+  "description": "Template base para canais de esportes e futebol mundial",
+  "core": {
+    "niche": "esportes",
+    "language": "pt-BR",
+    "audience": {
+      "ageRange": [15, 50],
+      "interests": [
+        "futebol",
+        "futebol internacional",
+        "futebol brasileiro",
+        "táticas",
+        "histórias esportivas",
+        "curiosidades",
+        "copa do mundo",
+        "champions league"
+      ],
+      "painPoints": [
+        "análises superficiais",
+        "clickbaits repetitivos",
+        "narrativa sem emoção",
+        "falta de contexto histórico"
+      ],
+      "aspiration": "conhecer as histórias raras e entender a alma do futebol"
+    },
+    "values": [
+      "emoção autêntica",
+      "precisão histórica",
+      "respeito às lendas do esporte",
+      "sem sensacionalismo barato"
+    ],
+    "editorialLimits": {
+      "alwaysIn": [
+        "futebol internacional",
+        "futebol brasileiro",
+        "histórias de copas",
+        "curiosidades de craques",
+        "grandes rivalidades",
+        "táticas históricas"
+      ],
+      "alwaysOut": [
+        "fofocas extra-campo vazias",
+        "políticas internas de clubes",
+        "apologia a apostas",
+        "agressões físicas",
+        "sensacionalismo de crises"
+      ],
+      "humanReviewRequired": [
+        "opiniões polêmicas sobre arbitragem",
+        "contratações não confirmadas",
+        "comparações extremas de ídolos"
+      ]
+    },
+    "persona": {
+      "archetype": "O historiador apaixonado",
+      "tone": "narrativo, emocionante, dinâmico e respeitoso",
+      "forbiddenWords": [
+        "inacreditável",
+        "bombástico",
+        "chocante",
+        "você não vai acreditar",
+        "surpreendente",
+        "nunca antes visto",
+        "melhor da história"
+      ],
+      "preferredWords": [
+        "aconteceu que",
+        "o fato é",
+        "na verdade",
+        "o detalhe é",
+        "vale lembrar",
+        "para a história",
+        "o clássico"
+      ]
+    }
+  },
+  "strategy": {
+    "updatedAt": "2026-07-04T00:00:00Z",
+    "updatedBy": "template",
+    "contentPreferences": {
+      "preferredFormats": [
+        "explicativo",
+        "analise"
+      ],
+      "avoidFormats": [
+        "reacao"
+      ],
+      "optimalDurationSeconds": {
+        "min": 60,
+        "max": 180
+      },
+      "optimalPostingTimes": [
+        "12:00",
+        "18:00",
+        "21:00"
+      ],
+      "preferredEmotions": [
+        "admiracao",
+        "surpresa_positiva",
+        "nostalgia",
+        "empolgacao"
+      ]
+    },
+    "performanceThresholds": {
+      "editorialApprovalMinScore": 0.7,
+      "criticApprovalMinScore": 0.75,
+      "qcApprovalMinScore": 0.8,
+      "publishMinScore": 0.78
+    },
+    "platformWeights": {
+      "tiktok": 1.0,
+      "instagram": 0.8,
+      "youtube": 0.5
+    },
+    "ctaPatterns": [
+      "Qual é a sua maior lembrança desse dia? Deixa nos comentários.",
+      "Quem é o maior dessa geração? Comenta aí.",
+      "Gostou da história? Segue a página para mais clássicos."
+    ]
+  }
+}

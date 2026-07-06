@@ -1,0 +1,19 @@
+{
+  "channel": "@90kairo",
+  "version": "1.2",
+  "genes": {
+    "narrative_hook": {
+      "existential_contradiction": { "maturity": "Consolidado", "description": "Contrapõe a vida do craque com a dor do erro" },
+      "factual_historical": { "maturity": "Experimental", "description": "Relato objetivo do fato ocorrido" },
+      "mystery_hook": { "maturity": "Validado", "description": "Inicia com uma pergunta sobre o destino" }
+    },
+    "audio_tempo": {
+      "solene_slow_piano": { "maturity": "Consolidado", "description": "Drone inicial baixo, piano com muito decay após 5s" },
+      "orchestral_epic": { "maturity": "Experimental", "description": "Crescendo orquestral clássico" }
+    },
+    "visual_palette": {
+      "monochrome_to_warm_90s": { "maturity": "Consolidado", "description": "Preto e branco no gancho, cores quentes lavadas no meio" },
+      "high_saturation": { "maturity": "Dormant", "description": "Cores vivas e modernas de câmera digital" }
+    }
+  }
+}

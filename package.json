@@ -1,0 +1,35 @@
+{
+  "name": "cos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Content Operating System — transform information into distributed content",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" --filter \"./apps/agents/*\" run dev",
+    "build": "pnpm --filter \"./packages/*\" run build && pnpm --filter \"./apps/*\" run build",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "pnpm --recursive run typecheck",
+    "db:migrate": "node infra/postgres/migrate.js",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d",
+    "cycle-clock:dev": "pnpm --filter @cos/agent-cycle-clock run dev",
+    "cycle-clock:start": "pnpm --filter @cos/agent-cycle-clock run start"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.20.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "pg": "^8.22.0",
+    "tsx": "^4.22.4",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "dependencies": {
+    "@zernio/node": "^0.2.296"
+  }
+}

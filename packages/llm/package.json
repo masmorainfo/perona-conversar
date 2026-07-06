@@ -1,0 +1,20 @@
+{
+  "name": "@cos/llm",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w"
+  },
+  "dependencies": {
+    "@cos/types": "workspace:*",
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "*",
+    "dotenv": "^16.4.5",
+    "@types/node": "^20.14.0"
+  }
+}

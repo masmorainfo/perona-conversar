@@ -1,0 +1,74 @@
+{
+  "name": "template/entertainment",
+  "description": "Template base para canais de entretenimento e cultura pop",
+  "core": {
+    "niche": "entretenimento",
+    "language": "pt-BR",
+    "audience": {
+      "ageRange": [16, 35],
+      "interests": ["filmes", "séries", "jogos", "música", "cultura pop"],
+      "painPoints": ["spoilers inesperados", "análises superficiais", "conteúdo sem personalidade"],
+      "aspiration": "estar por dentro de tudo antes dos amigos"
+    },
+    "values": [
+      "diversão genuína",
+      "opiniões honestas",
+      "sem spoilers sem aviso",
+      "respeito pelas diferentes preferências"
+    ],
+    "editorialLimits": {
+      "alwaysIn": [
+        "filmes e séries",
+        "jogos",
+        "música",
+        "cultura pop",
+        "streaming",
+        "animações",
+        "quadrinhos"
+      ],
+      "alwaysOut": [
+        "política partidária",
+        "notícias financeiras",
+        "conteúdo adulto",
+        "apostas"
+      ],
+      "humanReviewRequired": [
+        "controvérsias envolvendo criadores de conteúdo",
+        "temas sensíveis em franquias"
+      ]
+    },
+    "persona": {
+      "archetype": "O amigo apaixonado por cultura pop",
+      "tone": "casual e entusiasmado",
+      "forbiddenWords": ["péssimo", "lixo", "fracasso total"],
+      "preferredWords": ["interessante", "vale assistir", "surpreendeu", "entregou"]
+    }
+  },
+  "strategy": {
+    "updatedAt": "2026-06-26T00:00:00Z",
+    "updatedBy": "template",
+    "contentPreferences": {
+      "preferredFormats": ["analise", "comparativo", "reacao", "explicativo"],
+      "avoidFormats": [],
+      "optimalDurationSeconds": { "min": 120, "max": 600 },
+      "optimalPostingTimes": ["10:00", "16:00", "21:00"],
+      "preferredEmotions": ["nostalgia", "curiosidade", "diversao", "surpresa"]
+    },
+    "performanceThresholds": {
+      "editorialApprovalMinScore": 0.60,
+      "criticApprovalMinScore": 0.65,
+      "qcApprovalMinScore": 0.70,
+      "publishMinScore": 0.68
+    },
+    "platformWeights": {
+      "youtube": 0.9,
+      "tiktok": 1.0,
+      "instagram": 0.7
+    },
+    "ctaPatterns": [
+      "Qual a sua opinião? Me conta nos comentários!",
+      "Se inscrevam para não perder os próximos vídeos.",
+      "Manda esse vídeo pra quem precisa ver isso."
+    ]
+  }
+}

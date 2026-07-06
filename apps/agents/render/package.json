@@ -1,0 +1,31 @@
+{
+  "name": "@cos/agent-render",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@cos/events": "workspace:*",
+    "@cos/types": "workspace:*",
+    "bullmq": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "pg": "^8.11.0",
+    "@types/pg": "^8.11.0",
+    "remotion": "^4.0.0",
+    "@remotion/renderer": "^4.0.0",
+    "@remotion/bundler": "^4.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "tsx": "^4.0.0",
+    "typescript": "*"
+  }
+}

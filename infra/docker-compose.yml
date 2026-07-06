@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cos_postgres
+    environment:
+      POSTGRES_USER: cos
+      POSTGRES_PASSWORD: cos_dev
+      POSTGRES_DB: cos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - cos_postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cos -d cos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: cos_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - cos_redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cos_postgres_data:
+  cos_redis_data:

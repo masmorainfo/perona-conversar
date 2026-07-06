@@ -1,0 +1,76 @@
+{
+  "name": "template/technology",
+  "description": "Template base para canais de tecnologia",
+  "core": {
+    "niche": "tecnologia",
+    "language": "pt-BR",
+    "audience": {
+      "ageRange": [18, 45],
+      "interests": ["tecnologia", "programação", "gadgets", "inovação"],
+      "painPoints": ["jargão técnico", "conteúdo superficial", "falta de contexto prático"],
+      "aspiration": "entender o futuro antes dos outros"
+    },
+    "values": [
+      "precisão factual",
+      "clareza acima de dramatismo",
+      "sem clickbait",
+      "respeito pela inteligência do público"
+    ],
+    "editorialLimits": {
+      "alwaysIn": [
+        "inteligência artificial",
+        "hardware",
+        "software",
+        "cibersegurança",
+        "startups",
+        "big tech",
+        "programação",
+        "internet das coisas"
+      ],
+      "alwaysOut": [
+        "política partidária",
+        "fofoca de celebridades",
+        "conteúdo adulto",
+        "apostas",
+        "esquemas financeiros"
+      ],
+      "humanReviewRequired": [
+        "controvérsias sobre empresas específicas",
+        "conteúdo sobre privacidade de dados pessoais"
+      ]
+    },
+    "persona": {
+      "archetype": "O especialista acessível",
+      "tone": "técnico mas humano",
+      "forbiddenWords": ["incrível", "bombástico", "chocante", "você não vai acreditar", "URGENTE"],
+      "preferredWords": ["importante", "relevante", "funciona assim", "na prática", "vale a pena entender"]
+    }
+  },
+  "strategy": {
+    "updatedAt": "2026-06-26T00:00:00Z",
+    "updatedBy": "template",
+    "contentPreferences": {
+      "preferredFormats": ["explicativo", "analise", "noticia"],
+      "avoidFormats": ["reacao"],
+      "optimalDurationSeconds": { "min": 180, "max": 480 },
+      "optimalPostingTimes": ["08:00", "12:00", "19:00"],
+      "preferredEmotions": ["curiosidade", "surpresa_positiva", "utilidade", "admiracao"]
+    },
+    "performanceThresholds": {
+      "editorialApprovalMinScore": 0.65,
+      "criticApprovalMinScore": 0.70,
+      "qcApprovalMinScore": 0.75,
+      "publishMinScore": 0.72
+    },
+    "platformWeights": {
+      "youtube": 1.0,
+      "tiktok": 0.7,
+      "instagram": 0.5
+    },
+    "ctaPatterns": [
+      "O que você acha disso? Conta nos comentários.",
+      "Ativa o sino para não perder a próxima análise.",
+      "Compartilha com alguém que precisa saber disso."
+    ]
+  }
+}

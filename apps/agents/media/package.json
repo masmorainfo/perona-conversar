@@ -1,0 +1,27 @@
+{
+  "name": "@cos/agent-media",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@cos/events": "workspace:*",
+    "@cos/llm": "workspace:*",
+    "@cos/types": "workspace:*",
+    "@types/pg": "^8.11.0",
+    "bullmq": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "pg": "^8.11.0",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/uuid": "^11.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "*"
+  }
+}

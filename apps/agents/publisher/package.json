@@ -1,0 +1,26 @@
+{
+  "name": "@cos/agent-publisher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@cos/events": "workspace:*",
+    "@cos/types": "workspace:*",
+    "@zernio/node": "^0.2.296",
+    "googleapis": "^140.0.0",
+    "bullmq": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "pg": "^8.11.0",
+    "@types/pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "*"
+  }
+}

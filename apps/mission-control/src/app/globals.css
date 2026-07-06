@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+:root {
+  --cos-background: #0b0b10;
+  --cos-surface-1: #11111b;
+  --cos-surface-2: #181825;
+  --cos-border: #1e1e2e;
+  --cos-accent: #cba6f7;
+  
+  --cos-success: #a6e3a1;
+  --cos-warning: #f9e2af;
+  --cos-danger: #f38ba8;
+  --cos-info: #89b4fa;
+  
+  --cos-foreground: #fafafa;
+  --cos-muted: #1e1e2e;
+  --cos-muted-foreground: #a1a1aa;
+}
+
+@theme {
+  --color-border: var(--cos-border);
+  --color-input: var(--cos-border);
+  --color-ring: var(--cos-accent);
+  --color-background: var(--cos-background);
+  --color-foreground: var(--cos-foreground);
+
+  --color-primary: var(--cos-accent);
+  --color-primary-foreground: #11111b;
+
+  --color-secondary: var(--cos-surface-1);
+  --color-secondary-foreground: var(--cos-foreground);
+  
+  --color-surface-1: var(--cos-surface-1);
+  --color-surface-2: var(--cos-surface-2);
+
+  --color-muted: var(--cos-muted);
+  --color-muted-foreground: var(--cos-muted-foreground);
+
+  --color-accent: var(--cos-accent);
+  --color-accent-foreground: #11111b;
+
+  --color-card: var(--cos-surface-2);
+  --color-card-foreground: var(--cos-foreground);
+  
+  /* Semantic Colors */
+  --color-success: var(--cos-success);
+  --color-warning: var(--cos-warning);
+  --color-danger: var(--cos-danger);
+  --color-info: var(--cos-info);
+}
+
+body {
+  background-color: var(--cos-background);
+  color: var(--cos-foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Custom Scrollbar for Workspace feeling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0b10;
+}
+::-webkit-scrollbar-thumb {
+  background: #181825;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #1e1e2e;
+}
+
+/* React Flow customizations for Dark Theme */
+.react-flow__renderer {
+  background: #0b0b10 !important;
+}
+.react-flow__node {
+  border-radius: 8px !important;
+  font-family: inherit !important;
+}
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: #cba6f7 !important;
+  border: 2px solid #0b0b10 !important;
+}
+.react-flow__edge-path {
+  stroke: #1e1e2e !important;
+  stroke-width: 2 !important;
+}
+.react-flow__controls {
+  background: #11111b !important;
+  border: 1px solid #1e1e2e !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+.react-flow__controls-button {
+  background: transparent !important;
+  border-bottom: 1px solid #1e1e2e !important;
+  fill: #fafafa !important;
+}
+.react-flow__controls-button:hover {
+  background: #181825 !important;
+}
