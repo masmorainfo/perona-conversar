@@ -20,6 +20,7 @@ const redisUrl = new URL(REDIS_URL);
 const connection = {
   host: redisUrl.hostname,
   port: parseInt(redisUrl.port || '6379', 10),
+  password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined,
 };
 
 const TELEGRAM_BOT_TOKEN = process.env['TELEGRAM_BOT_TOKEN'] ?? '';

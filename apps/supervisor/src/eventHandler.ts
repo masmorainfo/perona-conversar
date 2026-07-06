@@ -21,6 +21,7 @@ function getQueue(queueType: string, channelId: string): Queue {
       connection: {
         host: redisUrl.hostname,
         port: parseInt(redisUrl.port || '6379', 10),
+        password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined,
       },
     }));
   }
@@ -302,7 +303,7 @@ async function handleCycleStarted(pool: any, data: any): Promise<void> {
     const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
     const redisUrl = new URL(REDIS_URL);
     const pipelineQueue = new Queue('pipeline', {
-      connection: { host: redisUrl.hostname, port: parseInt(redisUrl.port || '6379', 10) },
+      connection: { host: redisUrl.hostname, port: parseInt(redisUrl.port || '6379', 10), password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined },
     });
 
     await pipelineQueue.add('EVALUATE_TRIGGER', { contentId, channelId, topic });

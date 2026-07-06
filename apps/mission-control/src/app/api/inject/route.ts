@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     const connection = {
       host: redisUrl.hostname,
       port: parseInt(redisUrl.port || '6379', 10),
+      password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined,
     };
 
     const supervisorQueue = new Queue(SUPERVISOR_QUEUE, { connection });

@@ -57,7 +57,7 @@ module.exports = {
     {
       name: 'cos-mission-control',
       script: 'node_modules/next/dist/bin/next',
-      args: 'start -p 3000',
+      args: 'start -p ' + (process.env.PORT || '3000'),
       cwd: 'apps/mission-control',
       env: { NODE_ENV: 'production' }
     }

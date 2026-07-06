@@ -12,6 +12,7 @@ export async function GET() {
     const connection = {
       host: redisUrl.hostname,
       port: parseInt(redisUrl.port || '6379', 10),
+      password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined,
     };
 
     // Buscar contagens de cada fila do BullMQ em paralelo
