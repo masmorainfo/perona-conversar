@@ -26,16 +26,21 @@ WORKDIR /app
 
 # Copy dependency definition files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+
+# Copy package package.jsons
 COPY packages/events/package.json ./packages/events/
+COPY packages/knowledge/package.json ./packages/knowledge/
+COPY packages/llm/package.json ./packages/llm/
+COPY packages/notifications/package.json ./packages/notifications/
 COPY packages/state-machine/package.json ./packages/state-machine/
 COPY packages/types/package.json ./packages/types/
-COPY packages/llm/package.json ./packages/llm/
+
+# Copy app package.jsons
 COPY apps/supervisor/package.json ./apps/supervisor/
 COPY apps/registry/package.json ./apps/registry/
 COPY apps/mission-control/package.json ./apps/mission-control/
 COPY apps/agents/world-observer/package.json ./apps/agents/world-observer/
 COPY apps/agents/signal-normalizer/package.json ./apps/agents/signal-normalizer/
-COPY apps/agents/world-observer-trends/package.json ./apps/agents/world-observer-trends/
 COPY apps/agents/script/package.json ./apps/agents/script/
 COPY apps/agents/research/package.json ./apps/agents/research/
 COPY apps/agents/render/package.json ./apps/agents/render/
