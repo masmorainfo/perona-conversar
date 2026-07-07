@@ -5,9 +5,13 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { compositeVideo } from './video-compositor.js';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load .env
-dotenv.config({ path: path.resolve(process.cwd(), '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const { Pool } = pg;
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';

@@ -8,9 +8,13 @@ import fs from 'fs';
 import { directNarrative } from './director.js';
 import { planStoryboard } from './storyboard-planner.js';
 import { MemoryProvider } from './memory-provider.js';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load .env
-dotenv.config({ path: path.resolve(process.cwd(), '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const { Pool } = pg;
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';

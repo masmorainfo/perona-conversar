@@ -21,8 +21,16 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
 
   constructor(apiKey?: string, baseURL?: string) {
     const forceMock = process.env.FORCE_MOCK_LLM === 'true';
-    // Modo NVIDIA: chave NVIDIA presente E sem chave OpenAI explícita
-    this.isNvidia = !!process.env.NVIDIA_API_KEY && !process.env.OPENAI_API_KEY;
+    
+    // Choose LLM Provider based on env config or automatic fallback
+    const provider = process.env.LLM_PROVIDER?.toLowerCase();
+    if (provider === 'nvidia') {
+      this.isNvidia = true;
+    } else if (provider === 'openai') {
+      this.isNvidia = false;
+    } else {
+      this.isNvidia = !!process.env.NVIDIA_API_KEY && !process.env.OPENAI_API_KEY;
+    }
 
     const key = forceMock ? undefined : (apiKey
       || (this.isNvidia ? process.env.NVIDIA_API_KEY : undefined)

@@ -142,7 +142,12 @@ export async function compositeVideo(
     console.log(`[Video Compositor] Bundling Remotion composition...`);
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const entryPoint = path.resolve(__dirname, './video-composition/index.tsx');
+    
+    // Resolve entrypoint to the raw .tsx file in 'src' directory, as Remotion's bundler needs the source file.
+    const entryPoint = __dirname.endsWith('dist')
+      ? path.resolve(__dirname, '../src/video-composition/index.tsx')
+      : path.resolve(__dirname, './video-composition/index.tsx');
+
     const bundleLocation = await bundle({
       entryPoint,
     });

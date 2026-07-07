@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import OpenAI from 'openai';
 
-dotenv.config({ path: path.resolve(process.cwd(), '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 async function test() {
   const apiKey = process.env.NVIDIA_API_KEY;
