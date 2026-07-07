@@ -55,6 +55,30 @@ module.exports = {
       env: { NODE_ENV: 'production' }
     },
     {
+      name: 'cos-agent-editorial',
+      script: 'apps/agents/editorial/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-research',
+      script: 'apps/agents/research/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-analytics',
+      script: 'apps/agents/analytics/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-learning',
+      script: 'apps/agents/learning/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
       name: 'cos-mission-control',
       script: 'node_modules/next/dist/bin/next',
       args: 'start -p ' + (process.env.PORT || '3000'),
