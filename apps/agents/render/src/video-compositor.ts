@@ -55,6 +55,12 @@ export async function compositeVideo(
 ): Promise<void> {
   console.log(`[Video Compositor] Iniciando render: ${contentId} [arquétipo: ${canonArchetype ?? 'nenhum'}]`);
 
+  if (process.env.FORCE_FFMPEG === 'true' || process.env.DISABLE_REMOTION === 'true') {
+    console.log(`[Video Compositor] FORCE_FFMPEG ou DISABLE_REMOTION ativado. Renderizando diretamente via FFmpeg...`);
+    await renderWithFFmpeg(contentId, script, assetUrls, outputVideoPath);
+    return;
+  }
+
   const fps = 30;
   let remotionInputProps: any = null;
   let totalFrames = 0;
