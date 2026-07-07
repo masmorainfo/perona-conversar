@@ -43,6 +43,10 @@ export async function processEvent(
     throw new Error(`Content ${contentId} not found`);
   }
 
+  // Resolve dynamic channel slug from DB to prevent defaulting to 'geral' in notifications
+  const chanRes = await pool.query('SELECT slug FROM channel_registry WHERE id = $1', [channelId]);
+  const channelSlug = chanRes.rows[0]?.slug ?? 'geral';
+
   // Restore the machine state from the DB
   const context: ContentMachineContext = {
     contentId,
@@ -155,7 +159,6 @@ export async function processEvent(
     // ── Notificações Telegram ─────────────────────────────────────────────────
     // Fire-and-forget — falha no Telegram nunca para o pipeline
     const topic = newState.context.topic;
-    const channelSlug = jobData.channelSlug as string | undefined;
     const criticFailCount = (newState.context.attemptCounts['CRITIC_FAIL'] ?? 0) as number;
 
     // Helper: spread condicional para evitar violar exactOptionalPropertyTypes

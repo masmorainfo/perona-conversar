@@ -817,6 +817,12 @@ async function bootstrap() {
   try {
     await initDb();
     console.log('✅ Conectado ao PostgreSQL');
+    // Desativa auto-publish globalmente no banco para garantir controle manual e envio de cards no Telegram
+    await getPool().query(
+      `UPDATE channel_registry 
+       SET strategy = jsonb_set(strategy, '{autoPublish}', 'false'::jsonb)`
+    );
+    console.log('[Supervisor] Enforced autoPublish = false for all channels');
   } catch (error) {
     console.error('❌ Falha ao conectar ao banco de dados:', error);
     process.exit(1);
