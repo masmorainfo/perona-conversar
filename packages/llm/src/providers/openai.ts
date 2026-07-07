@@ -217,10 +217,10 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
       if (prompt.includes('Motor de Oportunidades') || prompt.includes('oportunidade editorial')) {
         return JSON.stringify({
           hasOpportunity: true,
-          title: "A Revolução do Remotion no Desenvolvimento Web",
-          description: "Com base nos sinais virais sobre o uso de React e Remotion para vídeo programático, esse tema atrai engenheiros interessados em automação e novas stacks.",
-          score: 0.92,
-          sourceSignals: ["Remotion Render Server", "The future of video creation is programmatic"]
+          title: "O Silêncio de Berlim: A Queda Trágica de Zidane",
+          description: "Com base nos sinais e retrospectivas sobre a final da Copa do Mundo de 2006, analisamos o momento dramático da cabeçada de Zidane em Materazzi e seu abandono do campo.",
+          score: 0.95,
+          sourceSignals: ["Zinedine Zidane 2006", "Documentário e retrospectivas"]
         });
       }
       return '{}';
