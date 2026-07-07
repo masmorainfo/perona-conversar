@@ -27,6 +27,16 @@ const pool = new Pool({
 
 const supervisorQueue = new Queue(SUPERVISOR_QUEUE, { connection });
 
+function hasCredentials(platform: string): boolean {
+  if (platform === 'tiktok') {
+    return !!(process.env.ZERNIO_API_KEY && process.env.ZERNIO_TIKTOK_ACCOUNT_ID);
+  }
+  if (platform === 'youtube') {
+    return !!(process.env.YOUTUBE_CLIENT_ID && process.env.YOUTUBE_CLIENT_SECRET && process.env.YOUTUBE_REFRESH_TOKEN);
+  }
+  return false;
+}
+
 async function processPublishJob(job: Job<PublishJobData>) {
   const { contentId, channelId, platform, videoFilePath, attemptNumber, metadata } = job.data;
   console.log(`[Publisher Agent] Publicando vídeo no ${platform}... (Tentativa: ${attemptNumber})`);
@@ -48,12 +58,16 @@ async function processPublishJob(job: Job<PublishJobData>) {
     errorMessage = err.message;
   }
 
-  // Fallback to mock if upload was not successful
+  // Fallback to mock if upload was not successful AND no credentials are configured
   if (!success) {
-    console.log('[Publisher Agent] Rodando em modo simulado (MOCK)...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    success = true;
-    platformUrl = `https://mock-${platform}.com/watch?v=${contentId}`;
+    if (!hasCredentials(platform)) {
+      console.log(`[Publisher Agent] Credenciais ausentes para ${platform}. Rodando em modo simulado (MOCK)...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      success = true;
+      platformUrl = `https://mock-${platform}.com/watch?v=${contentId}`;
+    } else {
+      console.error(`[Publisher Agent] Real upload to ${platform} failed. Credentials are present, failing task as requested. Error: ${errorMessage}`);
+    }
   }
 
   const resultData: PublishResultData = {

@@ -547,16 +547,29 @@ async function tryEditTelegramMessage(
   if (state === 'READY_TO_PUBLISH') {
     statusText = `⏳ Publicando...`;
   } else if (state === 'PUBLISHED' || state === 'PUBLISHED_PARTIAL') {
-    statusText = `🚀 Publicado!`;
-    const results = (metadata.publicationResults ?? []) as Array<{ platform: string; platformUrl?: string }>;
+    const results = (metadata.publicationResults ?? []) as Array<{ platform: string; success?: boolean; platformUrl?: string }>;
+    const allSuccessful = results.length > 0 && results.every(r => r.success !== false);
+    statusText = allSuccessful ? `🚀 Publicado!` : `⚠️ Publicado com erros (ou falha total)`;
     if (results.length > 0) {
-      linksText = '\n🔗 *Links:*\n' + results.map(r => `  • *${r.platform}:* [Assistir 🔗](${r.platformUrl ?? '#'})`).join('\n');
+      linksText = '\n🔗 *Links:*\n' + results.map(r => {
+        if (r.success !== false) {
+          return `  • *${r.platform}:* [Assistir 🔗](${r.platformUrl ?? '#'})`;
+        } else {
+          return `  • *${r.platform}:* ❌ Falhou!`;
+        }
+      }).join('\n');
     }
   } else if (state === 'LEARNED') {
     statusText = `🎓 Aprendizado Concluído (VLS)`;
-    const results = (metadata.publicationResults ?? []) as Array<{ platform: string; platformUrl?: string }>;
+    const results = (metadata.publicationResults ?? []) as Array<{ platform: string; success?: boolean; platformUrl?: string }>;
     if (results.length > 0) {
-      linksText = '\n🔗 *Links:*\n' + results.map(r => `  • *${r.platform}:* [Assistir 🔗](${r.platformUrl ?? '#'})`).join('\n');
+      linksText = '\n🔗 *Links:*\n' + results.map(r => {
+        if (r.success !== false) {
+          return `  • *${r.platform}:* [Assistir 🔗](${r.platformUrl ?? '#'})`;
+        } else {
+          return `  • *${r.platform}:* ❌ Falhou!`;
+        }
+      }).join('\n');
     }
   } else {
     return false;
