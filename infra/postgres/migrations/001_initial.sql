@@ -2,6 +2,8 @@
 -- COS — Migration 001: Initial Schema
 -- ============================================================
 
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- ─── Channel Registry ────────────────────────────────────────────────────────
 
 CREATE TABLE channel_registry (
