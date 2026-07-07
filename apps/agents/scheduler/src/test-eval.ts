@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
-import { calculateDynamicScore } from './score.js';
+import { DefaultScoringStrategy } from './score.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +25,7 @@ async function evaluateOpportunities() {
 
     console.log(`[Scheduler] Avaliando ${opportunities.length} oportunidades PENDING...`);
     const now = Date.now();
+    const scoringStrategy = new DefaultScoringStrategy();
 
     for (const opp of opportunities) {
       const createdAt = new Date(opp.created_at).getTime();
@@ -35,7 +36,7 @@ async function evaluateOpportunities() {
         editorialCompatibility: opp.editorial_compatibility,
         momentum: opp.momentum,
       };
-      const dynamicScore = calculateDynamicScore(opp.base_score, factors, createdAt, now);
+      const dynamicScore = scoringStrategy.calculateScore(opp.base_score, factors, createdAt, now);
 
       if (dynamicScore >= DYNAMIC_SCORE_THRESHOLD) {
         console.log(`[Scheduler] 🌟 Oportunidade promovida para QUEUED: "${opp.title}" (Score: ${dynamicScore.toFixed(2)})`);
