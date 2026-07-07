@@ -59,7 +59,10 @@ export async function notify(
   let replyMarkup: TelegramInlineKeyboardMarkup | undefined = undefined;
 
   if (type === 'PENDING_REVIEW' && payload.contentId) {
-    let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL'] ?? 'http://127.0.0.1:3000';
+    let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL'] 
+      || (process.env['RAILWAY_PUBLIC_DOMAIN'] ? `https://${process.env['RAILWAY_PUBLIC_DOMAIN']}` : undefined)
+      || process.env['PUBLIC_URL']
+      || 'http://127.0.0.1:3000';
     if (MISSION_CONTROL_URL.includes('localhost')) {
       MISSION_CONTROL_URL = MISSION_CONTROL_URL.replace('localhost', '127.0.0.1');
     }

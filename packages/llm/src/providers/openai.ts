@@ -97,18 +97,68 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
       }
       if (prompt.includes('pesquisa detalhada') || prompt.includes('Pesquisador') || prompt.includes('pesquise sobre') || prompt.includes('pesquisa sobre')) {
-        return JSON.stringify({
-          summary: 'Este é um resumo gerado automaticamente sobre o tema solicitado, abordando as principais inovações.',
-          facts: [
-            'Fato 1: O desenvolvimento teve um aumento de 50% na adoção prática recente.',
-            'Fato 2: Estudos de caso demonstram eficiência aprimorada em mais de 30%.',
-            'Fato 3: Há uma forte tendência de consolidação da tecnologia no mercado global.'
-          ],
-          sources: [
-            { title: 'Tech Report 2026', url: 'https://example.com/tech-report' },
-            { title: 'AI Engineering Journal', url: 'https://example.com/ai-journal' }
-          ]
-        });
+        const isZidane = prompt.includes('Zidane') || prompt.includes('2006') || prompt.includes('Berlim') || prompt.includes('Queda');
+        const isBaggio = prompt.includes('Baggio') || prompt.includes('1994') || prompt.includes('Pasadena');
+        const isRonaldo = prompt.includes('Ronaldo') || prompt.includes('2002') || prompt.includes('Yokohama');
+        const isAdriano = prompt.includes('Adriano') || prompt.includes('2004') || prompt.includes('Imperador');
+
+        let summary = 'Este é um resumo gerado automaticamente sobre o tema solicitado, abordando as principais inovações.';
+        let facts = [
+          'Fato 1: O desenvolvimento teve um aumento de 50% na adoção prática recente.',
+          'Fato 2: Estudos de caso demonstram eficiência aprimorada em mais de 30%.',
+          'Fato 3: Há uma tendência de consolidação no mercado.'
+        ];
+        let sources = [
+          { title: 'Report', url: 'https://example.com' }
+        ];
+
+        if (isZidane) {
+          summary = 'Análise dramática da final da Copa do Mundo de 2006. O craque Zinedine Zidane encerra sua brilhante carreira de forma trágica com uma expulsão após cabeçada em Materazzi, deixando a França desfalcada.';
+          facts = [
+            'Fato 1: Zidane abriu o placar na final com um pênalti de cavadinha antológico.',
+            'Fato 2: A provocação de Materazzi resultou na cabeçada aos 110 minutos de jogo.',
+            'Fato 3: A Itália conquistou o título nos pênaltis após o empate de 1 a 1.'
+          ];
+          sources = [
+            { title: 'FIFA World Cup Archives 2006', url: 'https://fifa.com/archives' },
+            { title: 'L\'Équipe Retrospective', url: 'https://lequipe.fr' }
+          ];
+        } else if (isBaggio) {
+          summary = 'A tragédia e solidão silenciosa de Roberto Baggio após desperdiçar o pênalti decisivo na final da Copa do Mundo de 1994 em Pasadena contra o Brasil, marcando sua carreira para sempre.';
+          facts = [
+            'Fato 1: Baggio carregou a Itália nas costas durante o mata-mata com 5 gols fundamentais.',
+            'Fato 2: O pênalti perdido selou o tetracampeonato mundial da Seleção Brasileira.',
+            'Fato 3: A imagem de Baggio estático com a cabeça baixa tornou-se o maior retrato da dor no futebol.'
+          ];
+          sources = [
+            { title: 'La Gazzetta dello Sport Retrospective', url: 'https://gazzetta.it' },
+            { title: 'Copa 94 Pasadena Archives', url: 'https://fifa.com/archives-1994' }
+          ];
+        } else if (isRonaldo) {
+          summary = 'O milagre e a redenção histórica de Ronaldo Fenômeno na Copa do Mundo de 2002 em Yokohama, superando lesões devastadoras no joelho para dar o pentacampeonato ao Brasil.';
+          facts = [
+            'Fato 1: Ronaldo passou por duas cirurgias gravíssimas no joelho que quase encerraram sua carreira.',
+            'Fato 2: Marcou 8 gols no torneio, incluindo os dois gols da final contra a Alemanha.',
+            'Fato 3: A superação de Ronaldo é considerada a maior volta por cima da história do esporte.'
+          ];
+          sources = [
+            { title: 'Placar Especial Penta', url: 'https://placar.com.br' },
+            { title: 'FIFA World Cup 2002 Highlights', url: 'https://fifa.com/archives-2002' }
+          ];
+        } else if (isAdriano) {
+          summary = 'A fantástica e emocionante redenção de Adriano Imperador na final da Copa América de 2004 contra a Argentina, marcando o gol de empate aos 93 minutos de jogo.';
+          facts = [
+            'Fato 1: A Argentina vencia por 2 a 1 até o último minuto dos acréscimos.',
+            'Fato 2: Adriano acertou um voleio espetacular aos 93 minutos para empatar o jogo.',
+            'Fato 3: O Brasil venceu a disputa nos pênaltis, consagrando Adriano como o herói e artilheiro.'
+          ];
+          sources = [
+            { title: 'Copa América 2004 Archives', url: 'https://conmebol.com' },
+            { title: 'Globo Esporte Retrospective', url: 'https://ge.globo.com' }
+          ];
+        }
+
+        return JSON.stringify({ summary, facts, sources });
       }
       if (options?.task === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
         // Tenta responder de acordo com o tema solicitado no prompt
