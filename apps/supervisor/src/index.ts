@@ -820,12 +820,12 @@ async function bootstrap() {
   try {
     await initDb();
     console.log('✅ Conectado ao PostgreSQL');
-    // Desativa auto-publish globalmente no banco para garantir controle manual e envio de cards no Telegram
+    // Desativa auto-publish e força publicação no TikTok para todos os canais
     await getPool().query(
       `UPDATE channel_registry 
-       SET strategy = jsonb_set(strategy, '{autoPublish}', 'false'::jsonb)`
+       SET strategy = strategy || '{"autoPublish": false, "platformWeights": {"tiktok": 1}}'::jsonb`
     );
-    console.log('[Supervisor] Enforced autoPublish = false for all channels');
+    console.log('[Supervisor] Enforced autoPublish = false and platformWeights = {"tiktok": 1} for all channels');
   } catch (error) {
     console.error('❌ Falha ao conectar ao banco de dados:', error);
     process.exit(1);
