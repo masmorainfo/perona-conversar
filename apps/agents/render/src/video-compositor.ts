@@ -3,7 +3,7 @@ import { getCompositions, renderMedia } from '@remotion/renderer';
 import { execSync } from 'child_process';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import type { CanonArchetype } from '@cos/types';
+import type { CanonArchetype, RenderManifest } from '@cos/types';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
