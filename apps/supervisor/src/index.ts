@@ -25,6 +25,7 @@ const connection = {
 
 const TELEGRAM_BOT_TOKEN = process.env['TELEGRAM_BOT_TOKEN'] ?? '';
 const TELEGRAM_CHAT_ID   = process.env['TELEGRAM_CHAT_ID'] ?? '';
+const CHANNEL_SLUG       = process.env['CHANNEL_SLUG'] ?? 'kairo-futebol';
 
 // Teclado fixo no rodapé do Telegram
 const KAIRO_REPLAY_KEYBOARD = {
@@ -55,12 +56,13 @@ async function startNextHistory(): Promise<void> {
 
   try {
     const chanRes = await pool.query(
-      "SELECT id FROM channel_registry WHERE slug = 'teleserie'"
+      "SELECT id FROM channel_registry WHERE slug = $1",
+      [CHANNEL_SLUG]
     );
 
     if (chanRes.rows.length === 0) {
       const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
-      await sendTelegram('❌ Canal KAIRO (teleserie) não encontrado no registro.', telegramConfig);
+      await sendTelegram(`❌ Canal KAIRO (${CHANNEL_SLUG}) não encontrado no registro.`, telegramConfig);
       return;
     }
 
@@ -756,11 +758,12 @@ async function pollTelegram(): Promise<void> {
       const pool = getPool();
       try {
         const chanRes = await pool.query(
-          "SELECT id, org_id FROM channel_registry WHERE slug = 'teleserie'"
+          "SELECT id, org_id FROM channel_registry WHERE slug = $1",
+          [CHANNEL_SLUG]
         );
         if (chanRes.rows.length === 0) {
           const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
-          await sendTelegram('❌ Canal KAIRO (teleserie) não encontrado no registro.', telegramConfig);
+          await sendTelegram(`❌ Canal KAIRO (${CHANNEL_SLUG}) não encontrado no registro.`, telegramConfig);
           continue;
         }
         
