@@ -7,10 +7,16 @@ export async function GET(request: Request, context: { params: Promise<{ filenam
   
   try {
     // Determine the absolute path to the workspace root's tmp/outputs directory
-    const filePath = path.resolve(process.cwd(), '../../tmp/outputs', filename);
+    let filePath = path.resolve(process.cwd(), '../../tmp/outputs', filename);
     
     if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      // Try absolute path fallback for production alignment
+      const fallbackPath = path.join('/tmp/outputs', filename);
+      if (fs.existsSync(fallbackPath)) {
+        filePath = fallbackPath;
+      } else {
+        return NextResponse.json({ error: `File not found at ${filePath} or ${fallbackPath}` }, { status: 404 });
+      }
     }
 
     const fileBuffer = fs.readFileSync(filePath);
