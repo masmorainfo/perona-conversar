@@ -79,6 +79,36 @@ module.exports = {
       env: { NODE_ENV: 'production' }
     },
     {
+      name: 'cos-agent-world-observer',
+      script: 'apps/agents/world-observer/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-signal-normalizer',
+      script: 'apps/agents/signal-normalizer/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-scheduler',
+      script: 'apps/agents/scheduler/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-observer',
+      script: 'apps/agents/observer/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
+      name: 'cos-agent-cycle-clock',
+      script: 'apps/agents/cycle-clock/dist/index.js',
+      cwd: '.',
+      env: { NODE_ENV: 'production' }
+    },
+    {
       name: 'cos-mission-control',
       script: 'node_modules/next/dist/bin/next',
       args: 'start -p ' + (process.env.PORT || '3000'),
