@@ -6,7 +6,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PORT=3000
 
-# Install Chromium, FFmpeg, and native fonts (important for emoji and subtitles rendering in Remotion)
+# Install Chromium, FFmpeg, native fonts, Python and pip (required for Edge-TTS and Python scrapers)
 RUN apt-get update && apt-get install -y \
     chromium \
     ffmpeg \
@@ -16,7 +16,13 @@ RUN apt-get update && apt-get install -y \
     fonts-liberation \
     libgbm-dev \
     libasound2 \
+    python3 \
+    python3-pip \
+    python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies for Edge-TTS and scrapers globally
+RUN pip3 install --break-system-packages edge-tts selenium webdriver-manager beautifulsoup4
 
 # Install pnpm and PM2 globally
 RUN npm install -g pnpm@9.0.0 pm2
