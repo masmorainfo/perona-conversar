@@ -34,6 +34,48 @@
       "dna_gene": "orchestral_epic",
       "tags": ["orchestral", "epic", "crescendo", "drama", "cinematico", "kairo"],
       "description": "Crescendo orquestral clássico cinematográfico — gene audio_tempo experimental. Indicado para Momento Impossível e arcos de espanto."
+    },
+    {
+      "filename": "heroi_tragico_piano.mp3",
+      "type": "audio",
+      "archetype": "heroi_tragico",
+      "tags": ["piano", "melancolico", "culpa", "grandeza", "tragico", "lento", "kairo"],
+      "description": "Trilha do arquétipo Herói Trágico — piano melancólico, lento. Culpa e grandeza de uma falha monumental."
+    },
+    {
+      "filename": "exilado_arpeggio.mp3",
+      "type": "audio",
+      "archetype": "exilado_que_retorna",
+      "tags": ["arpejo", "cordas", "esperanca", "redencao", "melancolia", "kairo"],
+      "description": "Trilha do arquétipo Exilado que Retorna — arpejo de cordas com esperança sob luz dourada."
+    },
+    {
+      "filename": "eterno_segundo_chamber.mp3",
+      "type": "audio",
+      "archetype": "eterno_segundo",
+      "tags": ["camera", "minimalista", "injustica", "dignidade", "discreto", "kairo"],
+      "description": "Trilha do arquétipo Eterno Segundo — câmara minimalista. Injustiça e dignidade silenciosa de quem não levou a coroa."
+    },
+    {
+      "filename": "martir_solitude.mp3",
+      "type": "audio",
+      "archetype": "martir_esquecido",
+      "tags": ["solitude", "silencio", "legado", "esparso", "minimal", "kairo"],
+      "description": "Trilha do arquétipo Mártir Esquecido — esparso, quase silêncio. Solidão e legado de uma história oculta."
+    },
+    {
+      "filename": "momento_impossivel_epic.mp3",
+      "type": "audio",
+      "archetype": "momento_impossivel",
+      "tags": ["epico", "espanto", "extase", "explosao", "orquestral", "kairo"],
+      "description": "Trilha do arquétipo Momento Impossível — orquestra com corte dramático. Espanto e êxtase do instante sobrenatural."
+    },
+    {
+      "filename": "default_music.mp3",
+      "type": "audio",
+      "archetype": "default",
+      "tags": ["neutro", "fallback", "piano", "kairo"],
+      "description": "Trilha padrão de fallback — piano neutro, sem drama. Usado quando nenhum arquétipo é selecionado."
     }
   ]
 }
