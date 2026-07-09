@@ -125,22 +125,18 @@ Regras OBRIGATÓRIAS:
 3. Varie o ritmo — misture frases curtas com longas
 4. Mantenha o significado e os fatos — apenas reformule a forma
 5. Preserve o gancho (hook) impactante
-6. CANON OBRIGATÓRIO: "KAIRO não pede, KAIRO entrega." — NUNCA inclua pedidos de like, compartilhamento, inscrição, comentário ou qualquer call-to-action explícito. O fechamento deve ser uma reflexão final ou uma pergunta retórica, nunca um comando ao espectador.
-7. Mantenha o comprimento aproximado de cada seção
+6. Mantenha o comprimento aproximado de cada seção
 
 Resposta APENAS em JSON:
 {
   "hook": "hook humanizado",
-  "sections": ["seção 1 humanizada", "seção 2 humanizada", ...],
-  "cta": "cta humanizado"
+  "sections": ["seção 1 humanizada", "seção 2 humanizada", ...]
 }
 
 Roteiro original:
 HOOK: ${script.hook}
 
-${sectionsText}
-
-CTA: ${script.cta}`;
+${sectionsText}`;
 
   try {
     const responseJson = await llm.complete(prompt, { task: 'humanizer', jsonMode: true, temperature: 0.75 });
@@ -149,7 +145,6 @@ CTA: ${script.cta}`;
     return {
       ...script,
       hook: humanized.hook || script.hook,
-      cta: humanized.cta || script.cta,
       body: script.body.map((section, i) => ({
         ...section,
         content: (humanized.sections?.[i]) || section.content,
