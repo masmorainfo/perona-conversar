@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { LLMProvider, CompletionOptions, VoiceProvider, ImageProvider, NVIDIA_TASK_MODELS } from '../index.js';
 import fs from 'fs';
 import { exec } from 'child_process';
@@ -6,6 +7,7 @@ import { promisify } from 'util';
 import path from 'path';
 
 const execAsync = promisify(exec);
+const ANTHROPIC_DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
 // ─── Modelos padrão por provider ───────────────────────────────────────────────
 // NVIDIA NIM usa a API OpenAI-compatible mas com nomes de modelos diferentes.
@@ -17,45 +19,115 @@ const OPENAI_DEFAULT_EMBED_MODEL = 'text-embedding-3-small';
 
 export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider {
   private openai?: OpenAI;
+  private anthropic?: Anthropic;
   private readonly isNvidia: boolean;
+  private readonly isAnthropic: boolean;
 
   constructor(apiKey?: string, baseURL?: string) {
     const forceMock = process.env.FORCE_MOCK_LLM === 'true';
     
     // Choose LLM Provider based on env config or automatic fallback
     const provider = process.env.LLM_PROVIDER?.toLowerCase();
-    if (provider === 'nvidia') {
-      this.isNvidia = true;
-    } else if (provider === 'openai') {
+    this.isAnthropic = provider === 'anthropic' || (!provider && !!process.env.ANTHROPIC_API_KEY);
+
+    if (this.isAnthropic) {
       this.isNvidia = false;
+      const anthropicKey = forceMock ? undefined : (process.env.ANTHROPIC_API_KEY);
+      if (anthropicKey && anthropicKey.trim() !== '') {
+        this.anthropic = new Anthropic({ apiKey: anthropicKey, timeout: 120000 });
+        console.log(`[LLM] Modo: 🟣 Anthropic Claude | Modelo padrão: ${ANTHROPIC_DEFAULT_MODEL}`);
+      } else {
+        console.warn('⚠️ OpenAIProvider running in MOCK mode (no Anthropic API key)');
+      }
     } else {
-      this.isNvidia = !!process.env.NVIDIA_API_KEY && !process.env.OPENAI_API_KEY;
-    }
+      if (provider === 'nvidia') {
+        this.isNvidia = true;
+      } else if (provider === 'openai') {
+        this.isNvidia = false;
+      } else {
+        this.isNvidia = !!process.env.NVIDIA_API_KEY && !process.env.OPENAI_API_KEY;
+      }
 
-    const key = forceMock ? undefined : (apiKey
-      || (this.isNvidia ? process.env.NVIDIA_API_KEY : undefined)
-      || process.env.OPENAI_API_KEY
-      || process.env.NVIDIA_API_KEY); // fallback final
+      const key = forceMock ? undefined : (apiKey
+        || (this.isNvidia ? process.env.NVIDIA_API_KEY : undefined)
+        || process.env.OPENAI_API_KEY
+        || process.env.NVIDIA_API_KEY);
 
-    const defaultBaseURL = this.isNvidia
-      ? 'https://integrate.api.nvidia.com/v1'
-      : process.env.OPENAI_BASE_URL;
+      const defaultBaseURL = this.isNvidia
+        ? 'https://integrate.api.nvidia.com/v1'
+        : process.env.OPENAI_BASE_URL;
 
-    const url = baseURL || defaultBaseURL;
+      const url = baseURL || defaultBaseURL;
 
-    if (key && key.trim() !== '') {
-      const config: any = { apiKey: key, timeout: 60000, maxRetries: 2 };
-      if (url) config.baseURL = url;
-      this.openai = new OpenAI(config);
-      console.log(`[LLM] Modo: ${this.isNvidia ? '🟢 NVIDIA NIM' : '🔵 OpenAI'} | Modelo padrão: ${this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL}`);
-    } else {
-      console.warn('⚠️ OpenAIProvider running in MOCK mode (no API key provided)');
+      if (key && key.trim() !== '') {
+        const isTest = process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true';
+        const config: any = { 
+          apiKey: key, 
+          timeout: isTest ? 5000 : 120000, 
+          maxRetries: isTest ? 0 : 1 
+        };
+        if (url) config.baseURL = url;
+        this.openai = new OpenAI(config);
+        console.log(`[LLM] Modo: ${this.isNvidia ? '🟢 NVIDIA NIM' : '🔵 OpenAI'} | Modelo padrão: ${this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL}`);
+      } else {
+        console.warn('⚠️ OpenAIProvider running in MOCK mode (no API key provided)');
+      }
     }
   }
 
   async complete(prompt: string, options?: CompletionOptions): Promise<string> {
+    // ─── Anthropic path ─────────────────────────────────────────────────
+    if (this.anthropic) {
+      const model = options?.model || ANTHROPIC_DEFAULT_MODEL;
+      const maxRetries = 3;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const systemPrompt = options?.jsonMode
+            ? 'Responda SOMENTE com JSON válido. Sem texto adicional fora do JSON. Sem markdown code fences.'
+            : undefined;
+          console.log(`[LLM] Anthropic chamando modelo=${model} jsonMode=${!!options?.jsonMode} promptLen=${prompt.length} tentativa=${attempt}/${maxRetries}`);
+          const startTime = Date.now();
+          
+          // Wrap with timeout to prevent infinite hangs
+          const timeoutMs = 60000;
+          const response = await Promise.race([
+            this.anthropic.messages.create({
+              model,
+              max_tokens: options?.maxTokens || 4096,
+              ...(systemPrompt ? { system: systemPrompt } : {}),
+              messages: [{ role: 'user', content: prompt }],
+            }),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error(`Anthropic timeout after ${timeoutMs}ms`)), timeoutMs)
+            ),
+          ]);
+          
+          const elapsed = Date.now() - startTime;
+          let text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+          console.log(`[LLM] Anthropic respondeu em ${elapsed}ms (${text.length} chars)`);
+          
+          // Strip markdown code fences if present (Anthropic doesn't have response_format)
+          if (options?.jsonMode && text.startsWith('```')) {
+            text = text.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '');
+          }
+          
+          return text;
+        } catch (err: any) {
+          const isLastAttempt = attempt === maxRetries;
+          if (isLastAttempt) {
+            console.error(`[LLM] Erro Anthropic FINAL (modelo: ${model}, ${maxRetries} tentativas esgotadas), falling back to mock:`, err?.message || err);
+          } else {
+            const backoffMs = attempt * 3000; // 3s, 6s
+            console.warn(`[LLM] Erro Anthropic tentativa ${attempt}/${maxRetries} (modelo: ${model}): ${err?.message || err}. Retrying in ${backoffMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+          }
+        }
+      }
+    }
+
+    // ─── OpenAI / NVIDIA path ───────────────────────────────────────────
     if (this.openai) {
-      // Prioridade: (1) model explícito → (2) task router → (3) default do provider
       const defaultModel = this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL;
       const routedModel = (this.isNvidia && options?.task)
         ? NVIDIA_TASK_MODELS[options.task]
@@ -89,11 +161,16 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
       }
       if (options?.task === 'editorial' || prompt.includes('Diretor Editorial') || prompt.includes('Diretor de Conteúdo') || prompt.includes('Inteligência Editorial')) {
+        const isBaggio = prompt.includes('Baggio') || prompt.includes('1994') || prompt.includes('Pasadena') || prompt.includes('baggio');
+        const isZidane = prompt.includes('Zidane') || prompt.includes('2006') || prompt.includes('Berlim') || prompt.includes('Queda') || prompt.includes('zidane');
+        
         return JSON.stringify({
           approved: true,
           score: 0.85,
-          direction: 'focar nos aspectos práticos de engenharia e impacto real do tema.',
-          reason: 'O tema é de alto interesse para o público-alvo e está de acordo com as diretrizes do canal.'
+          canonArchetype: (isBaggio || isZidane) ? 'heroi_tragico' : null,
+          canonTargetEmotion: (isBaggio || isZidane) ? 'Culpa + Grandeza' : null,
+          direction: (isBaggio || isZidane) ? 'focar na nobreza trágica do erro sob pressão' : 'focar nos aspectos práticos de engenharia e impacto real do tema.',
+          reason: 'O tema possui forte apelo emocional e arquetípico do futebol, alinhado à KAIRO.'
         });
       }
       if (prompt.includes('pesquisa detalhada') || prompt.includes('Pesquisador') || prompt.includes('pesquise sobre') || prompt.includes('pesquisa sobre')) {
@@ -161,13 +238,19 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         return JSON.stringify({ summary, facts, sources });
       }
       if (options?.task === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
-        // Tenta responder de acordo com o tema solicitado no prompt
         const isZidane = prompt.includes('Zidane') || prompt.includes('2006');
-        const title = isZidane ? 'O Silêncio de Berlim: A Queda Trágica de Zidane' : 'A Nova Era Tecnológica';
-        const hook = isZidane 
-          ? 'Em dois mil e seis, o mundo inteiro parou para assistir ao último ato de um gênio sob o céu de Berlim.'
-          : 'Você não vai querer ficar de fora do que está acontecendo agora!';
+        const isBaggio = prompt.includes('Baggio') || prompt.includes('1994') || prompt.includes('Pasadena') || prompt.includes('baggio');
         
+        const title = isZidane 
+          ? 'O Silêncio de Berlim: A Queda Trágica de Zidane' 
+          : (isBaggio ? 'Roberto Baggio: A nobreza trágica do erro em 1994' : 'A Nova Era Tecnológica');
+          
+        const hook = isZidane 
+          ? 'Em dois mil e seis, o world inteiro parou para assistir ao último ato de um gênio sob o céu de Berlim.'
+          : (isBaggio 
+            ? 'A tragédia e a solidão silenciosa de Roberto Baggio após isolar o pênalti decisivo em 1994. Uma dor profunda na alma.'
+            : 'Você não vai querer ficar de fora do que está acontecendo agora!');
+
         const body = isZidane ? [
           {
             content: 'Zinedine Zidane era a elegância pura, o maestro que conduzia a França rumo à glória eterna mais uma vez.',
@@ -183,6 +266,22 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
             content: 'A glória se desfez em cinzas sob os pés do herói exilado. Zidane saiu de campo sozinho, deixando o templo do futebol sem seu deus.',
             durationSeconds: 25,
             visualNote: 'Cena de encerramento vazia com foco na taça estática, tons escuros'
+          }
+        ] : (isBaggio ? [
+          {
+            content: 'Baggio carregou a Itália nas costas durante a Copa, mas o pênalti perdido selou a derrota. Uma imagem eterna.',
+            durationSeconds: 25,
+            visualNote: 'Baggio estático em preto e branco com película clássica. Solene slow piano tocando ao fundo.'
+          },
+          {
+            content: 'O silêncio trágico de Pasadena cobriu o craque. O erro que definiu uma carreira de grandeza e sofrimento.',
+            durationSeconds: 30,
+            visualNote: 'Corte lento de câmera mostrando a dor silenciosa no olhar do jogador em preto e branco.'
+          },
+          {
+            content: 'A redenção nunca veio sob o sol quente da Califórnia, restando apenas a nobreza trágica do herói caído.',
+            durationSeconds: 25,
+            visualNote: 'Cena final de Baggio caminhando sob luz quente de pôr do sol.'
           }
         ] : [
           {
@@ -200,10 +299,10 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
             durationSeconds: 20,
             visualNote: 'Equipe de engenheiros colaborando'
           }
-        ];
+        ]);
 
-        const keywords = isZidane 
-          ? ['futebol', 'copadomundo', 'zidane', 'kairo'] 
+        const keywords = (isZidane || isBaggio)
+          ? ['futebol', 'copadomundo', isZidane ? 'zidane' : 'baggio', 'kairo']
           : ['tecnologia', 'inovacao', 'futuro', 'ia'];
 
         return JSON.stringify({
@@ -214,34 +313,73 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
           estimatedDurationSeconds: body.reduce((acc, s) => acc + s.durationSeconds, 0),
           description: isZidane 
             ? 'A história dramática do último jogo de Zinedine Zidane na final da Copa do Mundo de 2006.' 
-            : 'Uma análise profunda sobre como a tecnologia está transformando o cenário atual.',
+            : (isBaggio 
+              ? 'A tragédia e a solidão silenciosa de Roberto Baggio na Copa do Mundo de 1994.'
+              : 'Uma análise profunda sobre como a tecnologia está transformando o cenário atual.'),
           keywords
+        });
+      }
+      // KDR — KAIRO Deep Research (Cinematic Genome Library proposals)
+      if (prompt.includes('Cinematic Genome Library') || prompt.includes('CGL')) {
+        return JSON.stringify({
+          entries: [
+            {
+              concept: 'Golden Hour Silhouette',
+              description: 'Usar a luz dourada do golden hour para criar silhuetas dramáticas de jogadores, enfatizando a solidão e grandeza do momento. Técnica clássica do cinema europeu aplicada ao futebol.',
+              tags: ['golden-hour', 'silhueta', 'luz-natural', 'drama'],
+              canon_link: 'Linguagem Visual > Luz Natural',
+              confidence: 0.92,
+              reasoning: 'A KAIRO prioriza autenticidade visual — a luz natural do golden hour cria uma estética cinematográfica premium sem depender de efeitos artificiais.'
+            },
+            {
+              concept: 'Contra-Luz Emocional',
+              description: 'Posicionar a câmera contra a fonte de luz (sol baixo, refletores) para criar halos luminosos ao redor dos jogadores, reforçando a aura heroica ou trágica do momento narrativo.',
+              tags: ['contra-luz', 'backlight', 'halo', 'heroismo'],
+              canon_link: 'Emoções > Grandeza Trágica',
+              confidence: 0.85,
+              reasoning: 'A contra-luz é um recurso visual recorrente em documentários esportivos premiados e se alinha com a identidade de herói trágico da KAIRO.'
+            },
+            {
+              concept: 'Warm-Cool Color Contrast',
+              description: 'Intercalar tons quentes (dourado, âmbar) e frios (azul, cinza) na mesma sequência para criar tensão visual e refletir o conflito emocional da narrativa.',
+              tags: ['temperatura-cor', 'contraste', 'warm-cool', 'tensao-visual'],
+              canon_link: 'Cor > Paleta Emocional',
+              confidence: 0.78,
+              reasoning: 'O contraste warm-cool é usado extensivamente no cinema de Deakins e Lubezki, referências diretas para a estética KAIRO.'
+            }
+          ]
         });
       }
       if (options?.task === 'humanizer' || prompt.includes('Humanizer') || prompt.includes('humanizar')) {
         const isZidane = prompt.includes('Zidane') || prompt.includes('Berlim');
+        const isBaggio = prompt.includes('Baggio') || prompt.includes('Pasadena') || prompt.includes('baggio');
+        
         const hook = isZidane 
           ? 'Em dois mil e seis, o mundo inteiro parou pra ver o último ato de um gênio sob o céu de Berlim.'
-          : 'Você não vai querer ficar de fora do que tá acontecendo agora, né?';
+          : (isBaggio 
+            ? 'A tragédia e a solidão silenciosa de Roberto Baggio depois de isolar o pênalti de 94. Aquilo doeu fundo na alma.'
+            : 'Você não vai querer ficar de fora do que tá acontecendo agora, né?');
         
         const sections = isZidane ? [
           'Zinedine Zidane era a elegância pura, o maestro que conduzia a França rumo à glória eterna mais uma vez.',
           'Mas o destino reserva tragédias pesadas aos que tentam tocar a coroa dos deuses. Um segundo de fúria, e o silêncio caiu de vez sobre Berlim.',
           'A glória se desfez em cinzas sob os pés do herói exilado. Zidane saiu de campo sozinho, deixando o templo do futebol.'
+        ] : (isBaggio ? [
+          'Baggio carregou a Itália nas costas na Copa, mas perder aquele pênalti acabou com tudo. Que cena dolorida.',
+          'O silêncio total lá em Pasadena caiu sobre ele. Um lance que acabou marcando uma trajetória brilhante e sofrida.',
+          'Sob o sol de fritar da Califórnia, não teve final feliz. Só restou a dignidade dolorosa de um gigante que caiu.'
         ] : [
           'Primeiro, vamo olhar bem pra esse panorama de um jeito super prático.',
           'Depois, a gente analisa a eficiência que tá rolando de verdade no dia a dia.',
           'E pra fechar, vamo ver o impacto disso tudo no nosso futuro imediato.'
-        ];
-
-        const cta = isZidane 
-          ? 'Qual o maior drama que você já viu no futebol? Deixa aí nos comentários.'
-          : 'E aí, o que você achou de tudo isso? Deixa sua opinião nos comentários!';
+        ]);
 
         return JSON.stringify({
           hook,
           sections,
-          cta
+          cta: isBaggio 
+            ? 'E pra você, qual foi o maior drama que o futebol já produziu? Comenta aí embaixo.'
+            : 'Qual o maior drama que você já viu no futebol? Deixe seu comentário.'
         });
       }
       if (prompt.toLowerCase().includes('crítico') || prompt.toLowerCase().includes('critic') || prompt.toLowerCase().includes('avali')) {
