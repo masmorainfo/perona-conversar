@@ -335,6 +335,8 @@ function mapJobToEvent(jobType: string, data: any): ContentMachineEvent | null {
     case 'CRITIC_RESULT':
       if (data.evaluation.approved) return { type: 'CRITIC_PASS', evaluation: data.evaluation };
       else return { type: 'CRITIC_FAIL', evaluation: data.evaluation };
+    case 'STORYBOARD_RESULT':
+      return { type: 'STORYBOARD_COMPLETE', manifestPath: data.manifestPath };
     case 'MEDIA_RESULT':
       return { type: 'MEDIA_COMPLETE', assetUrls: data.assetUrls };
     case 'RENDER_RESULT':
@@ -400,10 +402,19 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
       });
       break;
     case 'CRITIC_OK':
-      await getQueue('media', channelId).add('generate_media', {
+      await getQueue('storyboard', channelId).add('plan_storyboard', {
         contentId,
         channelId,
         script: context.metadata.script,
+        canonArchetype: context.metadata.canonArchetype,
+        canonTargetEmotion: context.metadata.canonTargetEmotion,
+      });
+      break;
+    case 'STORYBOARD_PLANNED':
+      await getQueue('media', channelId).add('generate_media', {
+        contentId,
+        channelId,
+        storyManifestPath: context.metadata.storyManifestPath,
         canonArchetype: context.metadata.canonArchetype,
         canonTargetEmotion: context.metadata.canonTargetEmotion,
       });
@@ -413,7 +424,10 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         contentId,
         channelId,
         script: context.metadata.script,
-        assetUrls: context.metadata.assetUrls,
+        assetUrls: {
+          ...(context.metadata.assetUrls || {}),
+          storyManifest: context.metadata.storyManifestPath,
+        },
         canonArchetype: context.metadata.canonArchetype,
         canonTargetEmotion: context.metadata.canonTargetEmotion,
       });

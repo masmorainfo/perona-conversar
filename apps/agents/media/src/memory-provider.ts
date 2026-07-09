@@ -5,58 +5,149 @@ import type { VoiceProvider, ImageProvider } from '@cos/llm';
 import type { CinematicDirection } from './director.js';
 import type { PlannedScene } from './storyboard-planner.js';
 
+interface MemoryAsset {
+  filename: string;
+  tags: string[];
+  description: string;
+}
+
+interface MemoryIndexV2 {
+  version: number;
+  assets: MemoryAsset[];
+}
+
+interface AssetMatch {
+  asset: MemoryAsset;
+  fullPath: string;
+  score: number;
+}
+
+// Palavras comuns removidas da tokenização para evitar matches falso-positivos
+const STOP_WORDS = new Set([
+  'a', 'o', 'e', 'de', 'da', 'do', 'em', 'um', 'uma', 'para', 'com', 'que',
+  'the', 'of', 'and', 'in', 'to', 'for', 'is', 'on', 'at', 'by', 'an',
+  'visual', 'cena', 'scene', 'plano', 'shot', 'dramatic', 'pause', 'hook',
+  'futebol', 'football', 'soccer', 'background', 'clássico', 'classic',
+]);
+
+const MATCH_THRESHOLD = 0.15; // score mínimo para considerar um match autêntico
+
 export class MemoryProvider {
   private memoriesDir: string;
-  private memoriesIndex: Record<string, string> = {};
+  private assets: MemoryAsset[] = [];
 
   constructor() {
-    // Definimos o local da pasta de memórias autênticas
     this.memoriesDir = path.resolve(process.cwd(), '../../../packages/knowledge/memories');
     this.initializeMemoriesIndex();
   }
 
   private initializeMemoriesIndex() {
     try {
-      // Garante que o diretório exista
       if (!fs.existsSync(this.memoriesDir)) {
         fs.mkdirSync(this.memoriesDir, { recursive: true });
       }
 
       const indexPath = path.join(this.memoriesDir, 'index.json');
-      if (fs.existsSync(indexPath)) {
-        this.memoriesIndex = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
-      } else {
-        // Criamos um arquivo de índice padrão inicial vazio para exemplificar
-        const defaultIndex = {
-          "baggio": "baggio_penalty_1994.jpg",
-          "roberto carlos": "roberto_carlos_98.jpg",
-          "noruega": "brasil_noruega_98.jpg",
-          "kairo": "kairo_logo_aesthetic.jpg"
-        };
-        fs.writeFileSync(indexPath, JSON.stringify(defaultIndex, null, 2), 'utf-8');
-        this.memoriesIndex = defaultIndex;
+      if (!fs.existsSync(indexPath)) {
+        const emptyIndex: MemoryIndexV2 = { version: 2, assets: [] };
+        fs.writeFileSync(indexPath, JSON.stringify(emptyIndex, null, 2), 'utf-8');
+        this.assets = [];
+        return;
       }
+
+      const raw = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+
+      // Auto-migrate v1 → v2
+      if (!raw.version || raw.version < 2) {
+        console.log('[Memory Provider] Migrando index.json v1 → v2...');
+        const migrated: MemoryAsset[] = [];
+        for (const [key, filename] of Object.entries(raw)) {
+          if (key === 'version' || key === 'assets') continue;
+          migrated.push({
+            filename: filename as string,
+            tags: key.toLowerCase().split(/\s+/),
+            description: key,
+          });
+        }
+        const v2: MemoryIndexV2 = { version: 2, assets: migrated };
+        fs.writeFileSync(indexPath, JSON.stringify(v2, null, 2), 'utf-8');
+        this.assets = migrated;
+        console.log(`[Memory Provider] Migração concluída: ${migrated.length} assets.`);
+      } else {
+        this.assets = (raw as MemoryIndexV2).assets || [];
+      }
+
+      console.log(`[Memory Provider] Índice carregado: ${this.assets.length} assets.`);
     } catch (err) {
       console.warn('[Memory Provider] Não foi possível ler ou criar índice de memórias:', err);
     }
   }
 
   /**
-   * Tenta encontrar uma representação autêntica local no disco.
-   * Se encontrada, retorna o caminho físico. Se não, retorna null.
+   * Tokeniza uma string em termos relevantes (stop-words removidas).
    */
-  private findAuthenticAsset(visualDescription: string): string | null {
-    const descLower = visualDescription.toLowerCase();
-    for (const [key, filename] of Object.entries(this.memoriesIndex)) {
-      if (descLower.includes(key.toLowerCase())) {
-        const fullPath = path.join(this.memoriesDir, filename);
+  private tokenize(text: string): string[] {
+    return text
+      .toLowerCase()
+      .replace(/[^a-záàâãéèêíïóôõúüç0-9\s]/gi, ' ')
+      .split(/\s+/)
+      .filter(t => t.length > 1 && !STOP_WORDS.has(t));
+  }
+
+  /**
+   * Busca assets autênticos por overlap semântico de tokens.
+   * Retorna matches acima do threshold, ordenados por score decrescente.
+   */
+  private findAuthenticAssets(visualDescription: string): AssetMatch[] {
+    const queryTokens = this.tokenize(visualDescription);
+    if (queryTokens.length === 0) return [];
+
+    const matches: AssetMatch[] = [];
+
+    for (const asset of this.assets) {
+      const assetTokens = new Set([
+        ...asset.tags.map(t => t.toLowerCase()),
+        ...this.tokenize(asset.description),
+      ]);
+
+      const overlap = queryTokens.filter(t => assetTokens.has(t)).length;
+      const score = overlap / queryTokens.length;
+
+      if (score >= MATCH_THRESHOLD) {
+        const fullPath = path.join(this.memoriesDir, asset.filename);
         if (fs.existsSync(fullPath)) {
-          console.log(`[Memory Provider] 🟢 Ativo Autêntico ENCONTRADO para a cena: "${key}" -> ${fullPath}`);
-          return fullPath;
+          matches.push({ asset, fullPath, score });
         }
       }
     }
-    return null;
+
+    return matches.sort((a, b) => b.score - a.score);
+  }
+
+  /**
+   * Decide a fonte visual para uma cena: ativo autêntico ou fallback IA.
+   * Log explícito do motivo da decisão.
+   */
+  private resolveVisualSource(
+    visualDescription: string,
+    sceneIndex: number
+  ): { mediaPath: string; isAiFallback: boolean } {
+    const matches = this.findAuthenticAssets(visualDescription);
+
+    if (matches.length > 0) {
+      const best = matches[0];
+      console.log(
+        `[Memory Provider] 🟢 AUTÊNTICO cena ${sceneIndex}: "${best.asset.filename}" ` +
+        `(score: ${best.score.toFixed(2)}, tags: [${best.asset.tags.join(', ')}])`
+      );
+      return { mediaPath: best.fullPath, isAiFallback: false };
+    }
+
+    console.log(
+      `[Memory Provider] 🟡 FALLBACK IA cena ${sceneIndex}: nenhum match acima de ${MATCH_THRESHOLD} ` +
+      `para "${visualDescription.substring(0, 80)}..."`
+    );
+    return { mediaPath: `ai_visual:${sceneIndex}`, isAiFallback: true };
   }
 
   /**
@@ -79,22 +170,17 @@ export class MemoryProvider {
   }
 
   /**
-   * Resolve todos os ativos (imagens autênticas/IA, narração, etc.) e monta o RenderManifest.
+   * Constrói o manifesto conceitual puro (sem side-effects de IA) priorizando mídias reais.
    */
-  public async resolveAssetsAndBuildManifest(
+  public async buildConceptManifest(
     contentId: string,
     channelId: string,
     plannedScenes: PlannedScene[],
-    direction: CinematicDirection,
-    voiceProvider: VoiceProvider,
-    imageProvider: ImageProvider,
-    assetsDir: string
+    direction: CinematicDirection
   ): Promise<RenderManifest> {
-    console.log(`[Memory Provider] Iniciando resolução de ativos para unit: ${contentId}`);
+    console.log(`[Memory Provider] Construindo manifesto conceitual para unit: ${contentId}`);
 
     const scenes: TechnicalSceneProps[] = [];
-    const assetUrls: Record<string, string> = {};
-    const fps = 30;
 
     for (let idx = 0; idx < plannedScenes.length; idx++) {
       const pScene = plannedScenes[idx];
@@ -104,41 +190,26 @@ export class MemoryProvider {
       let narrationPath = '';
       let durationMs = 3000; // Default
 
-      // 1. Resolver Narrativo / Áudio
+      // 1. Resolver Narrativo / Áudio Conceitualmente
       if (pScene.isSilence) {
-        // Pausa / Silêncio do Canon. Não gera áudio de voz.
-        // Duração fixa: Silêncio I = 1.5s (45 frames), Silêncio III = 2.0s (60 frames)
         durationMs = idx === plannedScenes.length - 1 ? 2000 : 1500;
       } else {
-        const audioFile = path.join(assetsDir, `voiceover_scene_${idx}.mp3`);
-        console.log(`[Memory Provider] Gerando locução para cena ${idx + 1}...`);
-        await voiceProvider.generateSpeech(pScene.text, audioFile);
-        narrationPath = audioFile;
-        assetUrls[`voiceover_scene_${idx}`] = audioFile;
-
-        // Mede a duração exata do áudio e converte em milissegundos
-        durationMs = this.getAudioDurationMs(audioFile);
+        // Marcador para geração física futura
+        narrationPath = `ai_narration:${idx}`;
+        // Estimativa inicial de tempo (aproximadamente 3 palavras por segundo + 1s margem)
+        const wordCount = pScene.text.split(/\s+/).filter(Boolean).length;
+        durationMs = Math.max(3000, Math.ceil((wordCount / 3) * 1000) + 1000);
       }
 
-      // 2. Resolver Mídia Visual (Autêntica ou Fallback de IA)
-      const authenticAsset = this.findAuthenticAsset(pScene.visualDescription);
-      if (authenticAsset) {
-        mediaPath = authenticAsset;
-        assetUrls[`visual_scene_${idx}`] = authenticAsset;
-      } else {
-        // Fallback: Gerar imagem estilizada por IA
-        const visualFile = path.join(assetsDir, `visual_scene_${idx}.jpg`);
-        const archetypeStyle = direction.canonArchetype !== 'default'
-          ? this.buildArchetypePrompt(direction.canonArchetype as any, pScene.visualDescription)
-          : `Cinematic sports photography, clean composition, vertical 9:16. Subject: ${pScene.visualDescription}`;
+      // 2. Resolver Mídia Visual (Autêntica ou Fallback)
+      const visualSource = this.resolveVisualSource(pScene.visualDescription, idx);
+      mediaPath = visualSource.mediaPath;
 
-        console.log(`[Memory Provider] 🔴 Ativo autêntico não encontrado. Fallback de IA na cena ${idx + 1}...`);
-        await imageProvider.generateImage(archetypeStyle, visualFile);
-        mediaPath = visualFile;
-        assetUrls[`visual_scene_${idx}`] = visualFile;
-      }
+      const aiPrompt = direction.canonArchetype !== 'default'
+        ? this.buildArchetypePrompt(direction.canonArchetype as any, pScene.visualDescription)
+        : `Cinematic sports photography, clean composition, vertical 9:16. Subject: ${pScene.visualDescription}`;
 
-      // 3. Montar a TechnicalSceneProps para o RenderManifest
+      // 3. Montar a TechnicalSceneProps
       scenes.push({
         id: sceneId,
         durationMs,
@@ -149,11 +220,12 @@ export class MemoryProvider {
         layout: {
           type: 'fullscreen',
           mediaUrl: mediaPath,
-          // Guardar metadados específicos de direção na cena
           panZoomSpeed: pScene.cameraMovement === 'still' ? 0 : 1.15,
           effect: pScene.effect as any,
-          ...(narrationPath ? { narrationPath } : {}), // Envia a locução
-          cameraMovement: pScene.cameraMovement, // Passa o movimento planejado
+          ...(narrationPath ? { narrationPath } : {}),
+          cameraMovement: pScene.cameraMovement,
+          aiPrompt, // Guarda o prompt para síntese futura
+          isAiFallback: visualSource.isAiFallback
         } as any,
         captions: {
           text: pScene.text,
@@ -165,7 +237,6 @@ export class MemoryProvider {
       });
     }
 
-    // 4. Montar o RenderManifest final
     const manifest: RenderManifest = {
       videoId: `${channelId}_${contentId}`,
       masterOrientation: 'vertical',
@@ -185,7 +256,7 @@ export class MemoryProvider {
         safeAreasEnabled: true,
       },
       audioContext: {
-        bgmUrl: direction.audio.bgmName, // Nome lógico da trilha BGM
+        bgmUrl: direction.audio.bgmName,
         bgmVolume: direction.audio.bgmVolume,
         sfxEvents: [],
       },
@@ -193,6 +264,55 @@ export class MemoryProvider {
     };
 
     return manifest;
+  }
+
+  /**
+   * Executa a síntese física dos ativos de IA (geração de imagens e vozes) pendentes.
+   */
+  public async synthesizeAssets(
+    manifest: RenderManifest,
+    voiceProvider: VoiceProvider,
+    imageProvider: ImageProvider,
+    assetsDir: string
+  ): Promise<{ manifest: RenderManifest; assetUrls: Record<string, string> }> {
+    console.log(`[Memory Provider] Iniciando síntese física de ativos para unit: ${manifest.videoId}`);
+    const assetUrls: Record<string, string> = {};
+
+    // Garante que o diretório de assets exista
+    if (!fs.existsSync(assetsDir)) {
+      fs.mkdirSync(assetsDir, { recursive: true });
+    }
+
+    for (let idx = 0; idx < manifest.scenes.length; idx++) {
+      const scene = manifest.scenes[idx];
+      const layout = scene.layout as any;
+
+      // 1. Gera locução se necessário
+      if (layout.narrationPath && layout.narrationPath.startsWith('ai_narration:')) {
+        const audioFile = path.join(assetsDir, `voiceover_scene_${idx}.mp3`);
+        console.log(`[Memory Provider] [IA Speech] Gerando áudio para cena ${idx + 1}...`);
+        await voiceProvider.generateSpeech(scene.captions.text, audioFile);
+        layout.narrationPath = audioFile;
+        assetUrls[`voiceover_scene_${idx}`] = audioFile;
+
+        // Atualiza para a duração real do áudio gravado
+        scene.durationMs = this.getAudioDurationMs(audioFile);
+      }
+
+      // 2. Gera imagem de IA se necessário
+      if (layout.mediaUrl && layout.mediaUrl.startsWith('ai_visual:')) {
+        const visualFile = path.join(assetsDir, `visual_scene_${idx}.jpg`);
+        console.log(`[Memory Provider] [IA Visual] Gerando imagem para cena ${idx + 1}...`);
+        await imageProvider.generateImage(layout.aiPrompt, visualFile);
+        layout.mediaUrl = visualFile;
+        assetUrls[`visual_scene_${idx}`] = visualFile;
+      } else if (layout.mediaUrl && fs.existsSync(layout.mediaUrl)) {
+        // Se for arquivo autêntico existente localmente, associa para compatibilidade
+        assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
+      }
+    }
+
+    return { manifest, assetUrls };
   }
 
   private buildArchetypePrompt(archetype: CanonArchetype, description: string): string {

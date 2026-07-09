@@ -1,19 +1,24 @@
 {
   "channel": "@90kairo",
-  "version": "1.2",
+  "version": "1.3",
   "genes": {
     "narrative_hook": {
-      "existential_contradiction": { "maturity": "Consolidado", "description": "Contrapõe a vida do craque com a dor do erro" },
-      "factual_historical": { "maturity": "Experimental", "description": "Relato objetivo do fato ocorrido" },
-      "mystery_hook": { "maturity": "Validado", "description": "Inicia com uma pergunta sobre o destino" }
+      "existential_contradiction": { "maturity": "Consolidado", "description": "Contrapõe a vida do craque com a dor do erro", "canon_source": "Parte I — O Futebol como Mitologia" },
+      "factual_historical": { "maturity": "Experimental", "description": "Relato objetivo do fato ocorrido", "canon_source": "Parte I — A pergunta fundadora" },
+      "mystery_hook": { "maturity": "Validado", "description": "Inicia com uma pergunta sobre o destino", "canon_source": "Parte III — Silêncio II (O Silêncio da Pergunta)" },
+      "visual_essay": { "maturity": "Experimental", "description": "Justaposição de imagens carregadas sem narração explicativa", "canon_source": "Parte II — Mestre IV (Chris Marker): O Ensaio como Forma de Verdade" },
+      "unspoken_subtext": { "maturity": "Experimental", "description": "O que não é dito dói mais fundo — subtexto visual", "canon_source": "Parte II — Mestre V (Wong Kar-wai): A Beleza da Coisa Não Dita" }
     },
     "audio_tempo": {
-      "solene_slow_piano": { "maturity": "Consolidado", "description": "Drone inicial baixo, piano com muito decay após 5s" },
-      "orchestral_epic": { "maturity": "Experimental", "description": "Crescendo orquestral clássico" }
+      "solene_slow_piano": { "maturity": "Consolidado", "description": "Drone inicial baixo, piano com muito decay após 5s", "canon_source": "Parte II — Mestre III (Max Richter): A Arquitetura Emocional do Som" },
+      "orchestral_epic": { "maturity": "Experimental", "description": "Crescendo orquestral clássico", "canon_source": "Parte IV — Arquétipo Momento Impossível" },
+      "repetitive_arpeggio_crescendo": { "maturity": "Experimental", "description": "Repetição que constrói peso a cada ciclo, crescendo final", "canon_source": "Parte II — Mestre III (Max Richter): repetição como construção" },
+      "silence_then_burst": { "maturity": "Experimental", "description": "Corte total de som seguido de explosão orquestral", "canon_source": "Parte IV — Arquétipo Momento Impossível: corte de som, então explosão" }
     },
     "visual_palette": {
-      "monochrome_to_warm_90s": { "maturity": "Consolidado", "description": "Preto e branco no gancho, cores quentes lavadas no meio" },
-      "high_saturation": { "maturity": "Dormant", "description": "Cores vivas e modernas de câmera digital" }
+      "monochrome_to_warm_90s": { "maturity": "Consolidado", "description": "Preto e branco no gancho, cores quentes lavadas no meio", "canon_source": "Parte II — Mestre I (Sebastião Salgado): A Dignidade Trágica da Carne" },
+      "amber_sepia_warmth": { "maturity": "Experimental", "description": "Âmbar queimado, sépia — esperança sob luz dourada", "canon_source": "Parte IV — Arquétipo Exilado que Retorna: âmbar queimado, sépia" },
+      "monochrome_red_punctual": { "maturity": "Experimental", "description": "Preto e branco com vermelho pontual único", "canon_source": "Parte IV — Arquétipo Mártir Esquecido: preto e branco pontual, vermelho único" }
     }
   }
 }

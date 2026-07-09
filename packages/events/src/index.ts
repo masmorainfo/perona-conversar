@@ -26,7 +26,8 @@ export const QUEUE_TYPES = [
   'research',    // Research Agent
   'script',      // Script Agent
   'critic',      // Critic Agent
-  'media',       // Media Agent
+  'storyboard',  // Storyboard Agent (Layer 2)
+  'media',       // Media Agent (Layer 3 - asset generation)
   'render',      // Render Engine
   'quality',     // Quality Control
   'cinematic-review', // Cinematic Review
@@ -137,11 +138,28 @@ export interface CriticResultData {
   evaluation: CriticEvaluation
 }
 
+/** Emitido pelo Supervisor para o Storyboard Agent */
+export interface StoryboardJobData {
+  contentId: string
+  channelId: string
+  script: Script
+  canonArchetype?: CanonArchetype
+  canonTargetEmotion?: string
+}
+
+/** Resultado do Storyboard Agent → Supervisor */
+export interface StoryboardResultData {
+  contentId: string
+  channelId: string
+  manifestPath: string
+}
+
 /** Emitido pelo Supervisor para o Media Agent */
 export interface MediaJobData {
   contentId: string
   channelId: string
   script: Script
+  storyManifestPath: string
   /** Arquétipo do Canon KAIRO — define o estilo visual das imagens geradas */
   canonArchetype?: CanonArchetype
   canonTargetEmotion?: string

@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cos/cgl-writer": "workspace:*",
     "@cos/events": "workspace:*",
     "@cos/notifications": "workspace:*",
     "@cos/state-machine": "workspace:*",

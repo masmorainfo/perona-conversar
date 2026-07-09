@@ -119,7 +119,8 @@ async function processScriptJob(job: Job<ScriptJobData>) {
     Palavras proibidas: ${channelCore.persona?.forbiddenWords?.join(', ')}
     
     Crie um roteiro de vídeo atraente com base na seguinte pesquisa:
-    ${JSON.stringify(researchPackage.summary)}
+    TÓPICO OBRIGATÓRIO (o vídeo DEVE ser sobre este tema): "${researchPackage.topic}"
+    Resumo da pesquisa: ${JSON.stringify(researchPackage.summary)}
     Fatos principais: ${researchPackage.keyFacts?.join(' | ')}
   `;
 

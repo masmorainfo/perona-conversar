@@ -1,4 +1,5 @@
 import { Worker, Job, Queue } from 'bullmq';
+import { approveEntry, rejectEntry } from '@cos/cgl-writer';
 import { SUPERVISOR_QUEUE, OPPORTUNITY_TRIGGER_QUEUE, queueName } from '@cos/events';
 import { handleSupervisorEvent, processEvent } from './eventHandler.js';
 import { initDb, closeDb, getPool } from './db.js';
@@ -49,6 +50,53 @@ function escapeMarkdown(text: string): string {
   return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
 }
 
+// Poll por novas oportunidades após disparo manual do Opportunity Engine.
+// Timeout de 45s com fallback — nunca espera indefinidamente.
+const POLL_INTERVAL_MS = 5_000;
+const POLL_TIMEOUT_MS = 45_000;
+
+async function pollForNewOpportunities(
+  pool: ReturnType<typeof getPool>,
+  channelId: string,
+  telegramConfig: { botToken: string; chatId: string }
+): Promise<void> {
+  const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+  const scanStart = Date.now();
+
+  while (Date.now() - scanStart < POLL_TIMEOUT_MS) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+    const { rows } = await pool.query(`
+      SELECT id, title, COALESCE(dynamic_score, base_score) AS score
+      FROM content_opportunities
+      WHERE status = 'PENDING' AND channel_id = $1
+        AND created_at >= NOW() - INTERVAL '2 minutes'
+      ORDER BY COALESCE(dynamic_score, base_score) DESC
+      LIMIT 3
+    `, [channelId]);
+
+    if (rows.length > 0) {
+      const listText = rows
+        .map((r, i) => `${i + 1}. *${escapeMarkdown(r.title)}* (score: ${Number(r.score).toFixed(0)})`)
+        .join('\n');
+      await sendTelegram(
+        `🔎 *Varredura concluída\\!* ${rows.length} oportunidade(s) encontrada(s):\n\n${listText}\n\nToque em *🎬 Próxima História* para iniciar a melhor\\!`,
+        telegramConfig,
+        'MarkdownV2'
+      );
+      console.log(`[Supervisor] Poll pós-varredura: ${rows.length} oportunidades encontradas em ${((Date.now() - scanStart) / 1000).toFixed(0)}s`);
+      return;
+    }
+  }
+
+  // Timeout: nenhuma oportunidade gerada
+  await sendTelegram(
+    '⏰ A varredura não encontrou novas oportunidades nos últimos 45 segundos. Os sensores podem não ter captado sinais relevantes agora. Tente novamente mais tarde ou envie um tema manualmente digitando-o aqui.',
+    telegramConfig
+  );
+  console.log('[Supervisor] Poll pós-varredura: timeout (45s), nenhuma oportunidade encontrada.');
+}
+
 // Busca e enfileira a melhor oportunidade pendente do VLS para o canal KAIRO
 async function startNextHistory(): Promise<void> {
   const telegramConfig = { botToken: TELEGRAM_BOT_TOKEN, chatId: TELEGRAM_CHAT_ID };
@@ -88,6 +136,11 @@ async function startNextHistory(): Promise<void> {
       const opportunityQueue = new Queue(OPPORTUNITY_TRIGGER_QUEUE, { connection });
       await opportunityQueue.add('trigger', { timestamp: Date.now(), reason: 'manual_telegram_request' });
       await opportunityQueue.close();
+
+      // Fire-and-forget: poll por novas oportunidades com timeout de 45s
+      pollForNewOpportunities(pool, channelId, telegramConfig).catch((err) => {
+        console.error('[Supervisor] Erro no poll pós-varredura:', err);
+      });
       return;
     }
 
@@ -183,6 +236,7 @@ async function renderPendingList(messageIdToEdit?: number): Promise<void> {
 // Sem webhook, sem URL pública — funciona em localhost.
 
 let _lastUpdateId = 0;
+let _lastKDRTimestamp = 0;
 
 async function pollTelegram(): Promise<void> {
   if (!isNotificationsEnabled()) return;
@@ -313,7 +367,9 @@ async function pollTelegram(): Promise<void> {
           await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao processar ação.', true);
         }
       } else if (data.startsWith('reject_reason:')) {
-        const [_, contentId, reasonSlug] = data.split(':');
+        const parts = data.split(':');
+        const contentId = parts[1];
+        const reasonSlug = parts[2] || '';
         const pool = getPool();
         
         try {
@@ -330,12 +386,28 @@ async function pollTelegram(): Promise<void> {
           const metadata = contentUnit.metadata || {};
 
           let reasonText = 'Rejeitado via Telegram';
-          if (reasonSlug === 'not_brand') reasonText = 'Não representa a marca';
-          else if (reasonSlug === 'narration') reasonText = 'Narração artificial';
-          else if (reasonSlug === 'direction') reasonText = 'Direção cinematográfica';
-          else if (reasonSlug === 'images') reasonText = 'Imagens inadequadas';
-          else if (reasonSlug === 'subtitles') reasonText = 'Legendas ruins';
-          else if (reasonSlug === 'bad_execution') reasonText = 'Boa ideia, má execução';
+          // Mapa: slug do callback → texto legível + ENUM do banco editorial_feedback
+          const SLUG_TO_FEEDBACK: Record<string, { text: string; category: string }> = {
+            not_brand:     { text: 'Não representa a marca',  category: 'brand_mismatch' },
+            narration:     { text: 'Narração artificial',      category: 'artificial_narration' },
+            direction:     { text: 'Direção cinematográfica',  category: 'cinematic_direction' },
+            images:        { text: 'Imagens inadequadas',      category: 'inadequate_imagery' },
+            subtitles:     { text: 'Legendas ruins',           category: 'bad_captions' },
+            bad_execution: { text: 'Boa ideia, má execução',   category: 'good_idea_bad_execution' },
+          };
+
+          const feedbackEntry = SLUG_TO_FEEDBACK[reasonSlug];
+          if (feedbackEntry) {
+            reasonText = feedbackEntry.text;
+
+            // Grava feedback qualitativo estruturado na tabela editorial_feedback
+            await pool.query(
+              `INSERT INTO editorial_feedback (content_unit_id, source, category)
+               VALUES ($1, 'telegram', $2::editorial_feedback_category)`,
+              [contentId, feedbackEntry.category]
+            );
+            console.log(`[Supervisor] 📝 Feedback editorial gravado: ${feedbackEntry.category} (unit: ${contentId})`);
+          }
 
           // Transita o estado oficialmente para REJECTED enviando o motivo qualitativo
           await processEvent(pool, 'REVIEW_RESULT', { contentId, channelId, action: 'reject', reason: reasonText });
@@ -693,13 +765,55 @@ async function pollTelegram(): Promise<void> {
           await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao pular história.', true);
         }
       }
+
+      // ── KDR: Aprovar proposta para a CGL ──────────────────────────────────────
+      else if (data.startsWith('kdr_approve:')) {
+        const entryId = data.slice('kdr_approve:'.length);
+        try {
+          const result = approveEntry(entryId);
+          if (result.success && result.entry) {
+            await answerCallbackQuery(cbQuery.id, telegramConfig, `✅ Aprovado: ${result.entry.concept}`);
+            if (messageId) {
+              const txt = `📚 *Adicionado à CGL:*\n🎯 *${escapeMarkdown(result.entry.concept)}* → \`${result.entry.area}\``;
+              await editTelegramMessage(messageId, txt, telegramConfig, 'Markdown');
+            }
+          } else {
+            await answerCallbackQuery(cbQuery.id, telegramConfig, `❌ ${result.error || 'Proposta não encontrada ou já processada.'}`, true);
+          }
+        } catch (err) {
+          console.error('[Supervisor] Erro kdr_approve:', err);
+          await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao aprovar.', true);
+        }
+      }
+
+      // ── KDR: Rejeitar proposta ────────────────────────────────────────────────
+      else if (data.startsWith('kdr_reject:')) {
+        const entryId = data.slice('kdr_reject:'.length);
+        try {
+          const result = rejectEntry(entryId);
+          if (result.success && result.entry) {
+            await answerCallbackQuery(cbQuery.id, telegramConfig, `❌ Rejeitado: ${result.entry.concept}`);
+            if (messageId) {
+              const txt = `🗑️ *Proposta rejeitada:*\n_${escapeMarkdown(result.entry.concept)}_ (preservada para VLS)`;
+              await editTelegramMessage(messageId, txt, telegramConfig, 'Markdown');
+            }
+          } else {
+            await answerCallbackQuery(cbQuery.id, telegramConfig, `❌ ${result.error || 'Proposta não encontrada ou já processada.'}`, true);
+          }
+        } catch (err) {
+          console.error('[Supervisor] Erro kdr_reject:', err);
+          await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao rejeitar.', true);
+        }
+      }
       
       continue;
     }
 
     // ── 2. Processa Comandos de Texto Clássicos ───────────────────────────────
-    const text = update.message?.text?.trim() ?? '';
-    const fromChatId = String(update.message?.chat.id ?? '');
+    // Em channels, mensagens vêm como channel_post, não message
+    const msg = update.message ?? update.channel_post;
+    const text = msg?.text?.trim() ?? '';
+    const fromChatId = String(msg?.chat.id ?? '');
 
     if (fromChatId !== TELEGRAM_CHAT_ID) continue;
 
@@ -755,6 +869,45 @@ async function pollTelegram(): Promise<void> {
         await notify('TEST', { message: `🚫 Conteúdo *${contentId.slice(0, 8)}* rejeitado.` });
       } catch (err) {
         console.error('[Supervisor] Erro ao processar /reject via Telegram:', err);
+      }
+    } else if (text.startsWith('/kdr ')) {
+      // ── KDR: Pesquisa cinematográfica manual ────────────────────────────────
+      const kdrParts = text.slice(5).trim().split(/\s+/);
+      const kdrArea = kdrParts[0] || '';
+      const kdrQuery = kdrParts.slice(1).join(' ');
+
+      if (!kdrArea || !kdrQuery) {
+        const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+        await sendTelegram('⚠️ Uso: `/kdr <área> <tema>`\nÁreas: fotografia, storytelling, ritmo, montagem, som, cor, futebol, emocoes, simbolismo, cinema, referencias, documentarios, linguagem\\_visual', telegramConfig, 'Markdown');
+        continue;
+      }
+
+      // Rate limit: 1 por minuto
+      const now = Date.now();
+      if (now - _lastKDRTimestamp < 60_000) {
+        const waitSec = Math.ceil((60_000 - (now - _lastKDRTimestamp)) / 1000);
+        const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+        await sendTelegram(`⏳ Rate limit: aguarde ${waitSec}s antes do próximo /kdr.`, telegramConfig);
+        continue;
+      }
+      _lastKDRTimestamp = now;
+
+      try {
+        const kdrQueue = new Queue('kdr-research', { connection });
+        await kdrQueue.add('KDR_RESEARCH', {
+          area: kdrArea,
+          query: kdrQuery,
+          telegramChatId: TELEGRAM_CHAT_ID,
+          telegramBotToken: TELEGRAM_BOT_TOKEN,
+        });
+        await kdrQueue.close();
+
+        const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+        await sendTelegram(`🔬 *KDR iniciado:*\nÁrea: \`${escapeMarkdown(kdrArea)}\`\nQuery: _${escapeMarkdown(kdrQuery)}_\n\nAguarde as propostas...`, telegramConfig, 'Markdown');
+      } catch (err) {
+        console.error('[Supervisor] Erro ao enfileirar KDR:', err);
+        const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+        await sendTelegram('🚨 Erro ao iniciar pesquisa KDR.', telegramConfig);
       }
     } else {
       // Trata qualquer outro texto livre como criação de tema manual para o canal KAIRO (@90kairo)

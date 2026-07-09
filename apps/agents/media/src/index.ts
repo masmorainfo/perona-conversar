@@ -1,5 +1,5 @@
 import { Worker, Job, Queue } from 'bullmq';
-import { SUPERVISOR_QUEUE, queueName, MediaJobData, MediaResultData } from '@cos/events';
+import { SUPERVISOR_QUEUE, queueName, MediaJobData, MediaResultData, StoryboardJobData, StoryboardResultData } from '@cos/events';
 import { OpenAIProvider, VoiceProvider, ImageProvider } from '@cos/llm';
 import pg from 'pg';
 import dotenv from 'dotenv';
@@ -34,16 +34,11 @@ const voiceProvider: VoiceProvider = new OpenAIProvider();
 const imageProvider: ImageProvider = new OpenAIProvider();
 const memoryProvider = new MemoryProvider();
 
-async function processMediaJob(job: Job<MediaJobData>) {
+async function processStoryboardJob(job: Job<StoryboardJobData>) {
   const { contentId, channelId, script, canonArchetype, canonTargetEmotion } = job.data;
+  const archetypeLabel = canonArchetype ? `[Canon: ${canonArchetype}]` : '[sem arquétipo]';
+  console.log(`[Storyboard Agent] Iniciando planejamento visual para: "${script.title}" ${archetypeLabel}`);
 
-  const archetypeLabel = canonArchetype
-    ? `[Canon: ${canonArchetype} / ${canonTargetEmotion}]`
-    : '[sem arquétipo Canon]';
-
-  console.log(`[Media Agent] Iniciando direção de narrativa para: "${script.title}" ${archetypeLabel}`);
-
-  // Ensure output directory for this content unit exists
   const assetsDir = path.resolve(process.cwd(), `../../../tmp/assets/${contentId}`);
   if (!fs.existsSync(assetsDir)) {
     fs.mkdirSync(assetsDir, { recursive: true });
@@ -51,42 +46,52 @@ async function processMediaJob(job: Job<MediaJobData>) {
 
   // Layer 1: Director
   const direction = directNarrative(canonArchetype);
-  console.log(`[Media Agent] [Director] Direção artística: ${direction.mood}`);
+  console.log(`[Storyboard Agent] [Director] Direção artística: ${direction.mood}`);
 
   // Layer 2: Storyboard Planner
   const plannedScenes = planStoryboard(script, direction);
-  console.log(`[Media Agent] [Storyboard Planner] Roteiro dividido em ${plannedScenes.length} cenas (incluindo silêncios).`);
+  console.log(`[Storyboard Agent] [Planner] Roteiro dividido em ${plannedScenes.length} batidas.`);
 
-  // Layer 3: Memory Provider & Asset Resolution
-  const manifest = await memoryProvider.resolveAssetsAndBuildManifest(
+  // Layer 3: Memory Provider - Resolução conceitual pura (sem side-effects de IA)
+  const manifest = await memoryProvider.buildConceptManifest(contentId, channelId, plannedScenes, direction);
+
+  // Escreve o manifesto conceitual inicial no disco
+  const manifestPath = path.join(assetsDir, 'story_manifest.json');
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  console.log(`[Storyboard Agent] Story Manifest conceitual gravado em: ${manifestPath}`);
+
+  const resultData: StoryboardResultData = {
     contentId,
     channelId,
-    plannedScenes,
-    direction,
+    manifestPath,
+  };
+
+  await supervisorQueue.add('STORYBOARD_RESULT', resultData);
+  console.log(`[Storyboard Agent] Planejamento concluído. Evento enviado.`);
+}
+
+async function processMediaJob(job: Job<MediaJobData>) {
+  const { contentId, channelId, storyManifestPath } = job.data;
+  console.log(`[Media Agent] Iniciando síntese física de ativos para unit: ${contentId}`);
+
+  if (!fs.existsSync(storyManifestPath)) {
+    throw new Error(`Manifesto conceitual não encontrado no caminho: ${storyManifestPath}`);
+  }
+
+  const manifest = JSON.parse(fs.readFileSync(storyManifestPath, 'utf-8'));
+  const assetsDir = path.resolve(process.cwd(), `../../../tmp/assets/${contentId}`);
+
+  // Executa a síntese física real (imagens e locução)
+  const { manifest: synthesizedManifest, assetUrls } = await memoryProvider.synthesizeAssets(
+    manifest,
     voiceProvider,
     imageProvider,
     assetsDir
   );
 
-  // Write Story Manifest to disk
-  const manifestPath = path.join(assetsDir, 'story_manifest.json');
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
-  console.log(`[Media Agent] Story Manifest gravado com sucesso em: ${manifestPath}`);
-
-  // Gather URLs for compatible callbacks
-  const assetUrls: Record<string, string> = {
-    storyManifest: manifestPath,
-  };
-
-  // Populate dynamic scene urls for old-school callback support (fallback protection)
-  manifest.scenes.forEach((scene, i) => {
-    if (scene.layout.mediaUrl) {
-      assetUrls[`visual_sec_${i}`] = scene.layout.mediaUrl;
-    }
-    if ((scene.layout as any).narrationPath) {
-      assetUrls[`voiceover_sec_${i}`] = (scene.layout as any).narrationPath;
-    }
-  });
+  // Sobrescreve o manifesto com os caminhos físicos dos arquivos gerados
+  fs.writeFileSync(storyManifestPath, JSON.stringify(synthesizedManifest, null, 2), 'utf-8');
+  console.log(`[Media Agent] Story Manifest físico atualizado.`);
 
   const resultData: MediaResultData = {
     contentId,
@@ -95,22 +100,28 @@ async function processMediaJob(job: Job<MediaJobData>) {
   };
 
   await supervisorQueue.add('MEDIA_RESULT', resultData);
-  console.log(`[Media Agent] Direção cinematográfica concluída. Manifest registrado.`);
+  console.log(`[Media Agent] Síntese física concluída e URLs de mídias enviadas.`);
 }
 
 async function bootstrap() {
-  console.log('🚀 Iniciando Media Agent (Cinematic Engine)...');
+  console.log('🚀 Iniciando Media & Storyboard Agent (Cinematic Engine)...');
 
   const channelsRes = await pool.query('SELECT id FROM channel_registry');
   const channelIds = channelsRes.rows.map(r => r.id);
   if (channelIds.length === 0) channelIds.push('tech-br-001');
 
   for (const channelId of channelIds) {
-    const qName = queueName('media', channelId);
-    const worker = new Worker(qName, processMediaJob, { connection, concurrency: 2 });
+    // 1. Ouvir fila storyboard
+    const storyboardQName = queueName('storyboard', channelId);
+    const storyboardWorker = new Worker(storyboardQName, processStoryboardJob, { connection, concurrency: 2 });
+    storyboardWorker.on('ready', () => console.log(`✅ Ouve fila: ${storyboardQName}`));
+    storyboardWorker.on('error', err => console.error(`🚨 Erro no worker ${storyboardQName}:`, err));
 
-    worker.on('ready', () => console.log(`✅ Ouve fila: ${qName}`));
-    worker.on('error', err => console.error(`🚨 Erro no worker ${qName}:`, err));
+    // 2. Ouvir fila media
+    const mediaQName = queueName('media', channelId);
+    const mediaWorker = new Worker(mediaQName, processMediaJob, { connection, concurrency: 2 });
+    mediaWorker.on('ready', () => console.log(`✅ Ouve fila: ${mediaQName}`));
+    mediaWorker.on('error', err => console.error(`🚨 Erro no worker ${mediaQName}:`, err));
   }
 }
 

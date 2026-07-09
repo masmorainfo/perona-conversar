@@ -44,6 +44,8 @@ export function planStoryboard(
   for (let idx = 0; idx < script.body.length; idx++) {
     const section = script.body[idx];
     const movement = movements[idx % movements.length];
+    const isExilado = paletteGene === 'exilado_que_retorna';
+    const isHeroi = paletteGene === 'heroi_tragico';
 
     scenes.push({
       id: uuidv4(),
@@ -52,9 +54,23 @@ export function planStoryboard(
       cameraMovement: movement,
       transitionIn: idx === 0 ? 'fade' : 'cut',
       transitionDurationMs: idx === 0 ? 300 : 0,
-      effect: paletteGene === 'exilado_que_retorna' ? 'sepia' : (paletteGene === 'heroi_tragico' ? 'warm' : 'normal'),
+      effect: isExilado ? 'sepia' : (isHeroi ? 'warm' : 'normal'),
       isSilence: false,
     });
+
+    // Silêncio II — O Silêncio da Pergunta (Pausa após uma pergunta existencial)
+    if (section.content.trim().endsWith('?')) {
+      scenes.push({
+        id: uuidv4(),
+        text: '', // Sem locução
+        visualDescription: `Pausa dramática (Silêncio II - Pergunta), plano estático da cena anterior`,
+        cameraMovement: 'still',
+        transitionIn: 'cut',
+        transitionDurationMs: 0,
+        effect: isExilado ? 'sepia' : (isHeroi ? 'warm' : 'normal'),
+        isSilence: true,
+      });
+    }
   }
 
   // 3. Canon Silence I (Silêncio antes do destino - 1.5s antes do CTA/clímax)

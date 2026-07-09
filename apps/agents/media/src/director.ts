@@ -1,4 +1,10 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { CanonArchetype } from '@cos/types';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface CinematicDirection {
   canonArchetype: CanonArchetype | 'default';
@@ -132,14 +138,109 @@ const DEFAULT_DIRECTION: Omit<CinematicDirection, 'canonArchetype'> = {
   },
 };
 
+const AUDIO_GENES = {
+  solene_slow_piano: {
+    bgmName: 'solene_slow_piano.mp3',
+    bgmVolume: 0.20,
+    voiceTempo: 'slow' as const,
+    sfxIntensity: 'minimal' as const,
+  },
+  orchestral_epic: {
+    bgmName: 'orchestral_epic.mp3',
+    bgmVolume: 0.28,
+    voiceTempo: 'normal' as const,
+    sfxIntensity: 'heavy' as const,
+  }
+};
+
+const VISUAL_GENES = {
+  monochrome_to_warm_90s: {
+    primary: '#e8eef7',
+    secondary: '#648cc8',
+    accent: '#cba6f7',
+    background: '#050810',
+    overlayColor: '#0a1628',
+    overlayOpacity: 0.45,
+    vignetteColor: 'rgba(5, 8, 16, 0.7)',
+  },
+};
+
+function getActiveGeneOption(genes: any, category: string): string | null {
+  const categoryGenes = genes[category];
+  if (!categoryGenes) return null;
+
+  let bestOption: string | null = null;
+  let bestMaturityRank = -1;
+  const maturityRanks: Record<string, number> = {
+    'Consolidado': 3,
+    'Validado': 2,
+    'Experimental': 1,
+    'Dormant': 0
+  };
+
+  for (const [optionName, optionVal] of Object.entries(categoryGenes)) {
+    const maturity = (optionVal as any).maturity || 'Dormant';
+    const rank = maturityRanks[maturity] ?? 0;
+    if (rank > 0 && rank > bestMaturityRank) {
+      bestMaturityRank = rank;
+      bestOption = optionName;
+    }
+  }
+  return bestOption;
+}
+
 export function directNarrative(canonArchetype?: CanonArchetype): CinematicDirection {
   const archetype = canonArchetype || 'default';
   const directionProps = archetype !== 'default' && CANON_DIRECTIONS[archetype]
-    ? CANON_DIRECTIONS[archetype]
-    : DEFAULT_DIRECTION;
+    ? { ...CANON_DIRECTIONS[archetype] }
+    : { ...DEFAULT_DIRECTION };
+
+  // Tenta carregar o DNA de forma robusta
+  const dnaPaths = [
+    path.resolve(__dirname, '../../../../dna/kairo_dna.json'),
+    path.resolve(process.cwd(), 'dna/kairo_dna.json'),
+    path.resolve(process.cwd(), '../../../dna/kairo_dna.json')
+  ];
+
+  let dna: any = null;
+  for (const dnaPath of dnaPaths) {
+    if (fs.existsSync(dnaPath)) {
+      try {
+        dna = JSON.parse(fs.readFileSync(dnaPath, 'utf-8'));
+        break;
+      } catch (err) {
+        console.error(`[Director] Erro ao ler DNA em ${dnaPath}:`, err);
+      }
+    }
+  }
+
+  if (dna && dna.genes) {
+    // 1. Sobrescreve áudio com base no gene ativo
+    const activeAudioGene = getActiveGeneOption(dna.genes, 'audio_tempo');
+    if (activeAudioGene && activeAudioGene in AUDIO_GENES) {
+      const audioSettings = AUDIO_GENES[activeAudioGene as keyof typeof AUDIO_GENES];
+      console.log(`[Director] Aplicando gene ativo de áudio: "${activeAudioGene}"`);
+      directionProps.audio = {
+        ...directionProps.audio,
+        ...audioSettings
+      };
+    }
+
+    // 2. Sobrescreve paleta visual com base no gene ativo
+    const activeVisualGene = getActiveGeneOption(dna.genes, 'visual_palette');
+    if (activeVisualGene && activeVisualGene in VISUAL_GENES) {
+      const visualSettings = VISUAL_GENES[activeVisualGene as keyof typeof VISUAL_GENES];
+      console.log(`[Director] Aplicando gene ativo visual: "${activeVisualGene}"`);
+      directionProps.colors = {
+        ...directionProps.colors,
+        ...visualSettings
+      };
+    }
+  }
 
   return {
     canonArchetype: archetype,
     ...directionProps,
   };
 }
+

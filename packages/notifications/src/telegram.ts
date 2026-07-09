@@ -188,6 +188,13 @@ export interface TelegramUpdate {
     from?: { id: number; username?: string };
     text?: string;
   };
+  /** Mensagens em channels chegam como channel_post, não message. */
+  channel_post?: {
+    message_id: number;
+    chat: { id: number };
+    sender_chat?: { id: number };
+    text?: string;
+  };
   callback_query?: {
     id: string;
     from: { id: number; username?: string };

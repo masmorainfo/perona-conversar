@@ -62,3 +62,21 @@ Fugimos da monotonia do padrão web. Misturamos a precisão técnica com legibil
 
 ### Experiência de Inputs
 - Formulários não têm cara de formulário web tradicional. Possuem fundo escuro `bg-black/40` e bordas tênues. Ao receber foco, iluminam apenas a borda na cor lavanda e a Label do campo brilha junto.
+
+---
+
+## 3. Painel Editorial Móvel (Telegram Cards)
+
+O Telegram é uma extensão do Mission Control para decisões editoriais em mobilidade. Os cards enviados ao operador seguem os mesmos princípios de densidade e clareza, adaptados ao formato de mensagem.
+
+### Estrutura do Card de Curadoria
+Cada card contém exatamente: título da história, arquétipo narrativo, duração estimada, status de assinatura editorial (Signable/Unsignable) e link de preview. Nenhuma informação decorativa.
+
+### Hierarquia de Ações
+Os botões inline do Telegram seguem a mesma lógica dos Decision Docks do Mission Control:
+- **Ação primária** (`[🟢 Aprovar]`): equivalente ao botão preenchido com accent lavanda.
+- **Ação destrutiva** (`[🔴 Rejeitar]`): equivalente ao estado danger. Ao ser acionado, expande opções de descarte qualitativo com 1 toque.
+- **Ação secundária** (`[🟡 Solicitar Ajustes]`, `[▶ Assistir]`): equivalente a botões fantasma (outline).
+
+### Feedback Qualitativo de Descarte
+As opções de rejeição rápida não são campos de texto livre. São categorias pré-definidas que alimentam diretamente o VLS Learning Engine, permitindo rastreabilidade estatística por tipo de falha.

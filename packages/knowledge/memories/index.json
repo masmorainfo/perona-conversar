@@ -1,6 +1,25 @@
 {
-  "baggio": "baggio_penalty_1994.jpg",
-  "roberto carlos": "roberto_carlos_98.jpg",
-  "noruega": "brasil_noruega_98.jpg",
-  "kairo": "kairo_logo_aesthetic.jpg"
+  "version": 2,
+  "assets": [
+    {
+      "filename": "baggio_penalty_1994.jpg",
+      "tags": ["baggio", "roberto baggio", "penalty", "1994", "world cup", "final", "italy", "miss", "pasadena", "brazil"],
+      "description": "Roberto Baggio misses decisive penalty in 1994 World Cup final against Brazil"
+    },
+    {
+      "filename": "roberto_carlos_98.jpg",
+      "tags": ["roberto carlos", "1998", "brazil", "free kick", "lateral", "world cup"],
+      "description": "Roberto Carlos during 1998 World Cup"
+    },
+    {
+      "filename": "brasil_noruega_98.jpg",
+      "tags": ["brazil", "noruega", "norway", "1998", "world cup", "defeat", "upset"],
+      "description": "Brazil vs Norway 1998 World Cup upset defeat"
+    },
+    {
+      "filename": "kairo_logo_aesthetic.jpg",
+      "tags": ["kairo", "logo", "brand", "channel", "90kairo"],
+      "description": "KAIRO channel logo and aesthetic branding"
+    }
+  ]
 }

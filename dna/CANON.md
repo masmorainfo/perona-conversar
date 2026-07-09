@@ -166,6 +166,15 @@ O Canon pode crescer — novos Mestres podem ser adicionados, novos Arquétipos 
 A atualização do Canon não é uma tarefa técnica.  
 **É um ato editorial.**
 
+### Vínculo Canon → DNA → VLS
+
+O Canon é a **fonte de hipóteses** do sistema de aprendizado científico. Cada gene registrado em `dna/kairo_dna.json` deve derivar de um princípio documentado neste Canon. Cada experimento conduzido pelo VLS (manipulação de exatamente uma variável independente — Lei Zero) referencia a seção do Canon que o originou.
+
+* **Exemplo:** o gene `monochrome_to_warm_90s` (visual) deriva da Parte II, Mestre I (Salgado) — a dignidade trágica através da gravidade visual.
+* **Exemplo:** o gene `solene_slow_piano` (áudio) deriva da Parte II, Mestre III (Richter) — a arquitetura emocional do som.
+
+Nenhum gene pode existir no DNA sem rastreabilidade ao Canon. Se um gene não possui origem documentada, ele deve ser classificado como `Experimental` até que sua fundamentação seja registrada.
+
 ---
 
 *KAIRO Canon v1.0 — Fundado em Julho de 2026*  

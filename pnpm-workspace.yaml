@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
   - 'apps/agents/*'
   - 'packages/*'
+  - 'packages/knowledge/*'
 
 allowBuilds:
   esbuild: set this to true or false

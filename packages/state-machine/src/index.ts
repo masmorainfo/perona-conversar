@@ -38,6 +38,7 @@ export type ContentMachineEvent =
   | { type: 'SCRIPT_COMPLETE'; script: ContentMachineMetadata }
   | { type: 'CRITIC_PASS'; evaluation: ContentMachineMetadata }
   | { type: 'CRITIC_FAIL'; evaluation: ContentMachineMetadata }
+  | { type: 'STORYBOARD_COMPLETE'; manifestPath: string }
   | { type: 'MEDIA_COMPLETE'; assetUrls: Record<string, string> }
   | { type: 'RENDER_COMPLETE'; videoFile: string }
   | { type: 'QC_PASS'; score: number; checklist: ContentMachineMetadata }
@@ -141,6 +142,12 @@ export const contentMachine = setup({
       metadata: ({ context, event }) => {
         if (event.type !== 'CRITIC_PASS') return context.metadata
         return { ...context.metadata, criticEvaluation: event.evaluation }
+      },
+    }),
+    setStoryboard: assign({
+      metadata: ({ context, event }) => {
+        if (event.type !== 'STORYBOARD_COMPLETE') return context.metadata
+        return { ...context.metadata, storyManifestPath: event.manifestPath }
       },
     }),
     setMedia: assign({
@@ -257,6 +264,13 @@ export const contentMachine = setup({
     },
 
     CRITIC_OK: {
+      on: {
+        STORYBOARD_COMPLETE: { target: 'STORYBOARD_PLANNED', actions: 'setStoryboard' },
+        ABANDON: 'ABANDONED',
+      },
+    },
+
+    STORYBOARD_PLANNED: {
       on: {
         MEDIA_COMPLETE: { target: 'PRODUCED', actions: 'setMedia' },
         ABANDON: 'ABANDONED',

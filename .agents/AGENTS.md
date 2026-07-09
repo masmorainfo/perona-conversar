@@ -51,7 +51,7 @@ O VLS não cria regras. O VLS não define templates. O VLS descobre o que funcio
 
 ---
 
-## Fase 2 — Operação do Canal KAIRO (TikTok)
+## Fase 3 — Operação e Aprendizado do Canal KAIRO (TikTok)
 
 ### 1. Foco do Ecossistema
 O COS e o VLS agora operam como uma empresa de mídia focada no canal do TikTok **@90kairo** com o tema **Futebol Mundial**. Todo esforço do sistema deve servir a este canal.
@@ -67,13 +67,15 @@ A prioridade do engenheiro/agente é propor a menor entrega possível que:
 * Possa ser validada com vídeos publicados no TikTok.
 * Produza dados e evidências científicas para o VLS.
 
-### 4. Direção Cinematográfica e VLS
-O gargalo atual é a direção cinematográfica (ritmo, narrativa, composição e identidade audiovisual). O VLS deve descobrir essa linguagem manipulando exatamente um gene do DNA Cinematográfico por vez. O DNA do canal não deve ser inventado, mas sim descoberto por evidências empíricas.
+### 4. Identidade Editorial acima de Métricas de Retenção
+A identidade editorial da KAIRO prevalece sobre qualquer métrica algorítmica. O VLS descobre a linguagem cinematográfica do canal manipulando exatamente um gene do DNA por vez (Lei Zero). O DNA do canal não é inventado — é descoberto por evidências empíricas. Nenhuma otimização de retenção ou engajamento pode comprometer um princípio do Canon.
 
 ### 5. Escala Orgânica
 A meta futura de 24 vídeos/dia (1 por hora) é um horizonte operacional. A progressão de escala deve ser estritamente gradual:
 `1 vídeo excelente` → `2 vídeos` → `4` → `8` → `12` → `24`.
-Apenas avançar para o próximo nível quando a frequência anterior estiver totalmente estável.### 6. Interface do Telegram (Painel Editorial Móvel)
+Apenas avançar para o próximo nível quando a frequência anterior estiver totalmente estável.
+
+### 6. Interface do Telegram (Painel Editorial Móvel)
 O Telegram é o painel de decisão e curadoria móvel do operador. Ao finalizar um vídeo, o operador deve receber um card no Telegram contendo:
 * Título, resumo, duração, status de assinatura e link de visualização.
 * Botões de ação direta: **[▶ Assistir]**, **[🟢 Aprovar]**, **[🔴 Rejeitar]**, **[🟡 Solicitar Ajustes]**.
@@ -100,6 +102,13 @@ A evolução dos genes no DNA Cinematográfico e Narrativo (`dna/kairo_dna.json`
 
 ### 9. Princípio da Humildade Editorial
 > Nenhum vídeo será publicado apenas porque o sistema acredita que está bom. A decisão final de representar a marca pertence sempre ao editor-chefe. O COS aprende. O VLS preserva a memória artística da KAIRO. Mas quem assina a obra continua sendo humano.
+
+### 10. World Observer — Regras Operacionais
+O World Observer é o sensor autônomo do COS. Ele captura sinais do mundo real (Trends24, Google Trends, Reddit, X, YouTube, RSS) e os entrega ao pipeline de normalização sem nenhuma decisão editorial.
+* **Princípio de não-filtragem:** o World Observer nunca descarta sinais. Ele coleta tudo; a curadoria pertence ao Opportunity Engine e ao Editor-Chefe.
+* **Trends24 como sensor primário:** o scraper Selenium (`scrapers/trends24/t3_scraper.py`) é executado a cada ciclo do World Observer. Sinais são injetados na fila `raw_signals` com `sensorName: 'Trends24'`.
+* **Falha silenciosa:** se o scraper falhar (timeout, site fora do ar), o ciclo continua com os demais sensores. Nenhuma falha de sensor interrompe o pipeline.
+* **Frequência:** o World Observer executa imediatamente no boot e repete a cada 60 segundos em ambiente de desenvolvimento. Em produção, o intervalo será configurável via variável de ambiente `WORLD_OBSERVER_INTERVAL_MS`.
 
 ---
 
