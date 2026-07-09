@@ -20,6 +20,20 @@
       "filename": "kairo_logo_aesthetic.jpg",
       "tags": ["kairo", "logo", "brand", "channel", "90kairo"],
       "description": "KAIRO channel logo and aesthetic branding"
+    },
+    {
+      "filename": "solene_slow_piano.mp3",
+      "type": "audio",
+      "dna_gene": "solene_slow_piano",
+      "tags": ["piano", "slow", "solene", "contemplativo", "minimalista", "drama", "kairo"],
+      "description": "Trilha solene de piano lento com muito decay — gene audio_tempo validado. Drone inicial baixo, piano entra após 5s."
+    },
+    {
+      "filename": "orchestral_epic.mp3",
+      "type": "audio",
+      "dna_gene": "orchestral_epic",
+      "tags": ["orchestral", "epic", "crescendo", "drama", "cinematico", "kairo"],
+      "description": "Crescendo orquestral clássico cinematográfico — gene audio_tempo experimental. Indicado para Momento Impossível e arcos de espanto."
     }
   ]
 }
