@@ -163,26 +163,27 @@ const AnimatedCaption: React.FC<{
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
 
-  // Distribuir a exibição das palavras ao longo dos frames da seção
-  const framesPerWord = Math.max(4, Math.floor(totalDurationInFrames / words.length));
+  // Segmentos de ~4 palavras para leitura fluida em dispositivos móveis
+  const SEGMENT_SIZE = 4;
+  const totalSegments = Math.ceil(words.length / SEGMENT_SIZE);
+  const framesPerSegment = Math.max(8, Math.floor(totalDurationInFrames / totalSegments));
   
-  // Encontrar o índice da palavra atual baseada no frame local
-  const currentWordIndex = Math.min(
-    words.length - 1,
-    Math.floor(localFrame / framesPerWord)
+  // Encontrar o segmento atual baseado no frame local
+  const currentSegmentIndex = Math.min(
+    totalSegments - 1,
+    Math.floor(localFrame / framesPerSegment)
   );
 
-  // Criamos um segmento de 2 ou 3 palavras próximas para dar fluidez na leitura rápida
-  const startIndex = Math.max(0, currentWordIndex - (currentWordIndex % 2));
-  const activeSegment = words.slice(startIndex, startIndex + 2).join(' ');
+  const startIndex = currentSegmentIndex * SEGMENT_SIZE;
+  const activeSegment = words.slice(startIndex, startIndex + SEGMENT_SIZE).join(' ');
 
-  // Animação suave e elástica (spring-like scale/fade) quando o segmento muda
-  const wordFrame = localFrame % (framesPerWord * 2);
-  const scale = interpolate(wordFrame, [0, 4], [0.85, 1.0], {
+  // Animação suave quando o segmento muda (spring-like scale/fade)
+  const segmentLocalFrame = localFrame - (currentSegmentIndex * framesPerSegment);
+  const scale = interpolate(segmentLocalFrame, [0, 4], [0.92, 1.0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  const opacity = interpolate(wordFrame, [0, 3], [0, 1], {
+  const opacity = interpolate(segmentLocalFrame, [0, 3], [0.3, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
@@ -203,9 +204,9 @@ const AnimatedCaption: React.FC<{
       <span
         style={{
           color: theme.captionColor,
-          fontSize: 64, // Aumentado para maior destaque visual no feed móvel
+          fontSize: 64,
           fontFamily: theme.fontFamily,
-          fontWeight: 900, // Força negrito extremo para legibilidade instantânea
+          fontWeight: 900,
           fontStyle: theme.fontStyle,
           letterSpacing: '0.01em',
           textShadow: '0 4px 12px rgba(0, 0, 0, 0.95), 0 0 20px rgba(0, 0, 0, 0.7)',
@@ -214,7 +215,7 @@ const AnimatedCaption: React.FC<{
           display: 'inline-block',
           transform: `scale(${scale})`,
           opacity,
-          textTransform: 'uppercase', // Estética moderna de legendas dinâmicas
+          textTransform: 'uppercase',
         }}
       >
         {activeSegment}

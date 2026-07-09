@@ -206,7 +206,7 @@ export class MemoryProvider {
       mediaPath = visualSource.mediaPath;
 
       const aiPrompt = direction.canonArchetype !== 'default'
-        ? this.buildArchetypePrompt(direction.canonArchetype as any, pScene.visualDescription)
+        ? this.buildArchetypePrompt(direction.canonArchetype as any, pScene.visualDescription, pScene.text)
         : `Cinematic sports photography, clean composition, vertical 9:16. Subject: ${pScene.visualDescription}`;
 
       // 3. Montar a TechnicalSceneProps
@@ -295,8 +295,9 @@ export class MemoryProvider {
         layout.narrationPath = audioFile;
         assetUrls[`voiceover_scene_${idx}`] = audioFile;
 
-        // Atualiza para a duração real do áudio gravado
-        scene.durationMs = this.getAudioDurationMs(audioFile);
+        // Atualiza para a duração real do áudio gravado + margem para evitar corte seco
+        const realDurationMs = this.getAudioDurationMs(audioFile);
+        scene.durationMs = realDurationMs + 500; // +500ms respiro entre fala e corte
       }
 
       // 2. Gera imagem de IA se necessário
@@ -312,17 +313,89 @@ export class MemoryProvider {
       }
     }
 
+    // Salva o manifest atualizado com durações reais no disco
+    // Isso garante que o Video Compositor leia as durações corretas (não as estimativas)
+    const updatedManifestPath = path.join(assetsDir, 'story_manifest.json');
+    fs.writeFileSync(updatedManifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+    console.log(`[Memory Provider] ✅ Manifest atualizado com durações reais salvo em: ${updatedManifestPath}`);
+
     return { manifest, assetUrls };
   }
 
-  private buildArchetypePrompt(archetype: CanonArchetype, description: string): string {
-    const styles: Record<CanonArchetype, string> = {
-      heroi_tragico: `Cinematic sports photography, extreme chiaroscuro lighting, deep black shadows, steel blue and charcoal gray tones. Lone tragic figure, sweat and exhaustion. Influenced by Sebastião Salgado's trágica dignidade. Vertical 9:16, photorealistic. Subject: ${description}`,
-      exilado_que_retorna: `Warm cinematic gold hour photography, amber sepia color grade, soft flare, foggy stadium background. Lone silhouette walking towards stadium lights. Melancholy hope. Vertical 9:16. Subject: ${description}`,
-      eterno_segundo: `Quiet desaturated sports documentary photo, muted tones, moss green and concrete grey. A player watching others celebrate. Dignified sorrow, clean composition. Vertical 9:16. Subject: ${description}`,
-      martir_esquecido: `Near monochrome stark photography. Almost pure black and white with a single deliberate rich red/crimson accent. Forgotten weathered face or empty locker room bench. Sacred silence. Vertical 9:16. Subject: ${description}`,
-      momento_impossivel: `High energy explosive sports photography, overexposed glowing stadium lights, electric cyan and gold highlights. A player frozen in mid-air defying gravity, high motion blur around. Ecstatic surprise. Vertical 9:16. Subject: ${description}`,
+  /**
+   * Gera prompt de imagem IA separando MOOD (do arquétipo) de CONTEÚDO (da cena).
+   * O arquétipo define cor, luz e atmosfera. A narração define o que aparece na cena.
+   * Isso garante que cada cena tenha uma composição visual distinta.
+   */
+  private buildArchetypePrompt(archetype: CanonArchetype, description: string, narrationText?: string): string {
+    // Mood prefix: define COR + LUZ + ATMOSFERA (sem cenas específicas como "silhueta" ou "estádio")
+    const moods: Record<CanonArchetype, string> = {
+      heroi_tragico: `Cinematic photography, extreme chiaroscuro lighting, deep black shadows, steel blue and charcoal gray tones. Tragic dignity.`,
+      exilado_que_retorna: `Cinematic warm photography, amber golden hour light, nostalgic film grain, soft atmospheric glow. Melancholy hope.`,
+      eterno_segundo: `Quiet documentary photography, desaturated muted tones, moss green and concrete grey. Dignified sorrow, clean composition.`,
+      martir_esquecido: `Near monochrome stark photography. Almost pure black and white with a single deliberate rich red accent. Sacred silence.`,
+      momento_impossivel: `High energy explosive photography, overexposed glowing lights, electric cyan and gold highlights. Ecstatic surprise, frozen motion.`,
     };
-    return styles[archetype] || description;
+
+    // Scene content: derivado da narração para criar cenas visualmente distintas
+    let sceneContent = description;
+    if (narrationText && this.isGenericDescription(description)) {
+      sceneContent = this.deriveVisualFromNarration(narrationText);
+    }
+
+    return `${moods[archetype]} Vertical 9:16, photorealistic. Scene: ${sceneContent}`;
+  }
+
+  /** Detecta se o visualDescription é genérico e precisa ser enriquecido */
+  private isGenericDescription(desc: string): boolean {
+    const lower = desc.toLowerCase();
+    return lower.startsWith('cena ') ||
+      lower.includes('futebol clássico') ||
+      lower.includes('futebol') && lower.length < 40 ||
+      lower.startsWith('hook visual:') ||
+      lower.includes('cta visual');
+  }
+
+  /**
+   * Extrai pistas visuais do texto narrado para gerar prompts de imagem contextualmente distintos.
+   * Mapeamento semântico: palavras-chave na narração → cena visual evocativa.
+   * Fallback: usa as palavras mais significativas do texto como guia.
+   */
+  private deriveVisualFromNarration(text: string): string {
+    const lower = text.toLowerCase();
+
+    // Mapeamento semântico genérico (funciona para qualquer história de futebol)
+    const mappings: Array<{ keywords: string[]; visual: string }> = [
+      { keywords: ['piscina', 'mergulh', 'água rasa', 'fundo da piscina', 'afogament'], visual: 'empty swimming pool at dusk, shallow turquoise water, concrete edge with wet footprints, tropical evening light' },
+      { keywords: ['vértebra', 'fratura', 'hospital', 'médic', 'paralisia', 'cirurgia', 'maca'], visual: 'hospital corridor with harsh fluorescent light, x-ray film of a spine on lightbox, empty wheelchair casting shadow' },
+      { keywords: ['troféu', 'ballon', 'melhor jogador', 'prêm', 'erguia'], visual: 'golden trophy gleaming under warm spotlight on dark stage, bokeh lights behind, hands reaching upward' },
+      { keywords: ['recuperação', 'reabilitação', 'voltou a treinar', 'retorn', 'campo de treino'], visual: 'empty training field at dawn, morning dew on grass, first golden light breaking through clouds, lone pair of boots' },
+      { keywords: ['champions', 'semifinal', 'final', 'gol decisivo'], visual: 'massive packed stadium at night, dramatic floodlights cutting through mist, roaring crowd, scoreboard glowing' },
+      { keywords: ['infância', 'garoto', 'jovem', 'criança', 'menino', '18 anos', 'dezoito'], visual: 'worn leather football on dusty street, afternoon sun through narrow alley, vintage photograph atmosphere, childhood innocence' },
+      { keywords: ['fé', 'deus', 'oração', 'crença', 'milagre', 'graça'], visual: 'single candle flame in dark room, hands clasped together, golden light filtering through window, quiet devotion' },
+      { keywords: ['destino', 'define', 'destrói', 'existência', 'quase apag'], visual: 'fork in misty road at twilight, two diverging paths, dramatic sky with break in storm clouds, pivotal moment' },
+      { keywords: ['legado', 'história', 'memória', 'lembr', 'esquec'], visual: 'old football jersey number 22 hanging alone in wooden locker room, dust particles floating in shaft of light' },
+      { keywords: ['milan', 'itália', 'europa', 'série a', 'san siro'], visual: 'iconic European football cathedral at twilight, gothic arches of stadium, warm amber floodlights against deep blue sky' },
+      { keywords: ['seleção', 'brasil', 'amarela', 'copa', 'mundial'], visual: 'yellow jersey folded on bench in empty changing room, national crest close-up, warm tungsten light' },
+      { keywords: ['solidão', 'sozinho', 'silêncio', 'calado', 'exílio', 'distância'], visual: 'lone figure sitting in empty stadium at dusk, long shadow stretching across rows of seats, contemplative mood' },
+      { keywords: ['dor', 'sofr', 'chorou', 'lágrima', 'agonia'], visual: 'close-up of clenched fist against dark background, single drop of sweat or tear catching light, raw emotion' },
+      { keywords: ['vitória', 'comemoração', 'celebr', 'alegria', 'êxtase'], visual: 'arms raised in triumph silhouetted against stadium lights, confetti particles suspended in air, euphoric energy' },
+    ];
+
+    // Encontra o primeiro mapeamento que combina com o conteúdo narrativo
+    for (const mapping of mappings) {
+      if (mapping.keywords.some(kw => lower.includes(kw))) {
+        return mapping.visual;
+      }
+    }
+
+    // Fallback: usa as palavras mais longas (significativas) do texto
+    const significantWords = text
+      .replace(/[^a-záàâãéèêíïóôõúüç0-9\s]/gi, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 4)
+      .slice(0, 12)
+      .join(' ');
+    return `Evocative cinematic scene representing: ${significantWords}`;
   }
 }
