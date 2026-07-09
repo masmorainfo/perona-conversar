@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import { LLMProvider, CompletionOptions, VoiceProvider, ImageProvider, NVIDIA_TASK_MODELS } from '../index.js';
+import { LLMProvider, CompletionOptions, VoiceProvider, ImageProvider, NVIDIA_TASK_MODELS, type SpeechResult, type WordTimestamp } from '../index.js';
 import fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -532,8 +532,104 @@ Responda SOMENTE com JSON:
     return Array.from({ length: dims }, (_, i) => Math.sin(i));
   }
 
-  async generateSpeech(text: string, outputPath: string): Promise<string> {
-    // 1. Try OpenAI TTS (if API key available)
+  async generateSpeech(text: string, outputPath: string): Promise<string | SpeechResult> {
+    // 1. Try ElevenLabs TTS (highest quality, with word-level timestamps)
+    const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+    const elevenLabsVoice = process.env.ELEVENLABS_VOICE_ID;
+    if (elevenLabsKey && elevenLabsVoice) {
+      try {
+        console.log(`[TTS] 🎙️ Tentando ElevenLabs (voice=${elevenLabsVoice}, model=eleven_multilingual_v2)...`);
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoice}/with-timestamps`,
+          {
+            method: 'POST',
+            headers: {
+              'xi-api-key': elevenLabsKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text,
+              model_id: 'eleven_multilingual_v2',
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                style: 0.4,
+                use_speaker_boost: true,
+              },
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => '');
+          throw new Error(`ElevenLabs API ${response.status}: ${errorBody.slice(0, 200)}`);
+        }
+
+        const data = await response.json() as {
+          audio_base64: string;
+          alignment: {
+            characters: string[];
+            character_start_times_seconds: number[];
+            character_end_times_seconds: number[];
+          };
+        };
+
+        // Decode and save audio
+        const audioBuffer = Buffer.from(data.audio_base64, 'base64');
+        await fs.promises.writeFile(outputPath, audioBuffer);
+
+        // Verify file size
+        const stats = fs.statSync(outputPath);
+        if (stats.size < 1000) {
+          throw new Error(`ElevenLabs output too small (${stats.size} bytes)`);
+        }
+
+        // Convert character-level alignment into word-level timestamps
+        const wordTimestamps: WordTimestamp[] = [];
+        if (data.alignment && data.alignment.characters.length > 0) {
+          const chars = data.alignment.characters;
+          const starts = data.alignment.character_start_times_seconds;
+          const ends = data.alignment.character_end_times_seconds;
+
+          let wordStart = 0;
+          let currentWord = '';
+
+          for (let i = 0; i < chars.length; i++) {
+            const ch = chars[i];
+            if (ch === ' ' || ch === '\n' || ch === '\r') {
+              // End of word
+              if (currentWord.trim()) {
+                wordTimestamps.push({
+                  word: currentWord.trim(),
+                  startMs: Math.round(starts[wordStart] * 1000),
+                  endMs: Math.round(ends[i - 1] * 1000),
+                });
+              }
+              currentWord = '';
+              wordStart = i + 1;
+            } else {
+              if (!currentWord) wordStart = i;
+              currentWord += ch;
+            }
+          }
+          // Last word
+          if (currentWord.trim()) {
+            wordTimestamps.push({
+              word: currentWord.trim(),
+              startMs: Math.round(starts[wordStart] * 1000),
+              endMs: Math.round(ends[chars.length - 1] * 1000),
+            });
+          }
+        }
+
+        console.log(`[TTS] ✅ ElevenLabs generated: ${outputPath} (${stats.size} bytes, ${wordTimestamps.length} word timestamps)`);
+        return { audioPath: outputPath, wordTimestamps };
+      } catch (err) {
+        console.error('[TTS] ElevenLabs Error, falling back to OpenAI/Edge-TTS:', err);
+      }
+    }
+
+    // 2. Try OpenAI TTS (if API key available)
     if (this.openai && !this.isNvidia) {
       try {
         const mp3 = await this.openai.audio.speech.create({
@@ -550,7 +646,7 @@ Responda SOMENTE com JSON:
       }
     }
 
-    // 2. Try Edge-TTS (Microsoft free TTS — supports pt-BR)
+    // 3. Try Edge-TTS (Microsoft free TTS — supports pt-BR)
     try {
       const tempTextFile = outputPath + '.txt';
       await fs.promises.writeFile(tempTextFile, text, 'utf-8');
@@ -570,7 +666,7 @@ Responda SOMENTE com JSON:
       console.error('[TTS] Edge-TTS failed, falling back to silent mock:', err);
     }
 
-    // 3. Last resort: silent WAV mock
+    // 4. Last resort: silent WAV mock
     console.warn('[TTS] ⚠️ Using silent mock audio — no TTS engine available');
     const sampleRate = 8000;
     const duration = 5; // seconds

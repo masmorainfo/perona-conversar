@@ -151,34 +151,78 @@ const AtmosphericOverlay: React.FC<{ color: string; opacity: number }> = ({ colo
   />
 );
 
+// ─── Word Timestamp type (mirrors @cos/llm WordTimestamp) ──────────────────────
+interface WordTimestamp {
+  word: string;
+  startMs: number;
+  endMs: number;
+}
+
 // ─── Legenda Animada ───────────────────────────────────────────────────────────
-// Exibe palavras sequencialmente baseadas no frame atual para dar dinamismo de TikTok/Reels
+// Uses real word-level timestamps from ElevenLabs when available.
+// Falls back to the uniform 4-word segment split when timestamps are absent.
 
 const AnimatedCaption: React.FC<{
   text: string;
   theme: CanonTheme;
   localFrame: number;
   totalDurationInFrames: number;
-}> = ({ text, theme, localFrame, totalDurationInFrames }) => {
+  wordTimestamps?: WordTimestamp[];
+}> = ({ text, theme, localFrame, totalDurationInFrames, wordTimestamps }) => {
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length === 0) return null;
 
-  // Segmentos de ~4 palavras para leitura fluida em dispositivos móveis
-  const SEGMENT_SIZE = 4;
-  const totalSegments = Math.ceil(words.length / SEGMENT_SIZE);
-  const framesPerSegment = Math.max(8, Math.floor(totalDurationInFrames / totalSegments));
-  
-  // Encontrar o segmento atual baseado no frame local
-  const currentSegmentIndex = Math.min(
-    totalSegments - 1,
-    Math.floor(localFrame / framesPerSegment)
-  );
+  const FPS = 30; // Remotion default
+  const currentTimeMs = (localFrame / FPS) * 1000;
 
-  const startIndex = currentSegmentIndex * SEGMENT_SIZE;
-  const activeSegment = words.slice(startIndex, startIndex + SEGMENT_SIZE).join(' ');
+  let activeSegment: string;
+  let segmentLocalFrame: number;
+
+  if (wordTimestamps && wordTimestamps.length > 0) {
+    // ─── Timestamp-driven mode (ElevenLabs) ──────────────────────────────
+    // Group words into segments of ~4 that share a time window,
+    // but use real timestamps to determine which segment is active.
+    const SEGMENT_SIZE = 4;
+    const totalSegments = Math.ceil(wordTimestamps.length / SEGMENT_SIZE);
+
+    // Find which segment is active based on real audio timing
+    let activeIndex = totalSegments - 1;
+    for (let s = 0; s < totalSegments; s++) {
+      const segEnd = s + 1 < totalSegments
+        ? wordTimestamps[Math.min((s + 1) * SEGMENT_SIZE, wordTimestamps.length - 1)].startMs
+        : wordTimestamps[wordTimestamps.length - 1].endMs + 500;
+      if (currentTimeMs < segEnd) {
+        activeIndex = s;
+        break;
+      }
+    }
+
+    const startIdx = activeIndex * SEGMENT_SIZE;
+    activeSegment = wordTimestamps
+      .slice(startIdx, startIdx + SEGMENT_SIZE)
+      .map(w => w.word)
+      .join(' ');
+
+    // Calculate local frame within this segment for animation
+    const segStartMs = wordTimestamps[startIdx].startMs;
+    segmentLocalFrame = Math.max(0, Math.round(((currentTimeMs - segStartMs) / 1000) * FPS));
+  } else {
+    // ─── Legacy uniform mode (Edge-TTS / OpenAI) ─────────────────────────
+    const SEGMENT_SIZE = 4;
+    const totalSegments = Math.ceil(words.length / SEGMENT_SIZE);
+    const framesPerSegment = Math.max(8, Math.floor(totalDurationInFrames / totalSegments));
+
+    const currentSegmentIndex = Math.min(
+      totalSegments - 1,
+      Math.floor(localFrame / framesPerSegment)
+    );
+
+    const startIndex = currentSegmentIndex * SEGMENT_SIZE;
+    activeSegment = words.slice(startIndex, startIndex + SEGMENT_SIZE).join(' ');
+    segmentLocalFrame = localFrame - (currentSegmentIndex * framesPerSegment);
+  }
 
   // Animação suave quando o segmento muda (spring-like scale/fade)
-  const segmentLocalFrame = localFrame - (currentSegmentIndex * framesPerSegment);
   const scale = interpolate(segmentLocalFrame, [0, 4], [0.92, 1.0], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -280,6 +324,7 @@ interface TechnicalScene {
   };
   captions: {
     text: string;
+    wordTimestamps?: WordTimestamp[];
   };
 }
 
@@ -366,6 +411,7 @@ const SceneFrame: React.FC<{
           theme={theme}
           localFrame={frame}
           totalDurationInFrames={durationInFrames}
+          wordTimestamps={captions.wordTimestamps}
         />
       )}
     </AbsoluteFill>

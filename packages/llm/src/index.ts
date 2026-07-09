@@ -41,8 +41,21 @@ export interface LLMProvider {
   embed(text: string): Promise<number[]>;
 }
 
+/** Word-level timestamp returned by TTS providers that support it (e.g. ElevenLabs) */
+export interface WordTimestamp {
+  word: string;
+  startMs: number;
+  endMs: number;
+}
+
+/** Result of speech generation — audio file path + optional word-level timing */
+export interface SpeechResult {
+  audioPath: string;
+  wordTimestamps?: WordTimestamp[];
+}
+
 export interface VoiceProvider {
-  generateSpeech(text: string, outputPath: string): Promise<string>;
+  generateSpeech(text: string, outputPath: string): Promise<string | SpeechResult>;
 }
 
 export interface ImageProvider {

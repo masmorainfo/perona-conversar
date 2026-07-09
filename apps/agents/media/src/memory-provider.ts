@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { RenderManifest, TechnicalSceneProps, CanonArchetype } from '@cos/types';
-import type { VoiceProvider, ImageProvider } from '@cos/llm';
+import type { VoiceProvider, ImageProvider, SpeechResult } from '@cos/llm';
 import type { CinematicDirection } from './director.js';
 import type { PlannedScene } from './storyboard-planner.js';
 
@@ -291,12 +291,24 @@ export class MemoryProvider {
       if (layout.narrationPath && layout.narrationPath.startsWith('ai_narration:')) {
         const audioFile = path.join(assetsDir, `voiceover_scene_${idx}.mp3`);
         console.log(`[Memory Provider] [IA Speech] Gerando áudio para cena ${idx + 1}...`);
-        await voiceProvider.generateSpeech(scene.captions.text, audioFile);
-        layout.narrationPath = audioFile;
-        assetUrls[`voiceover_scene_${idx}`] = audioFile;
+        const speechResult = await voiceProvider.generateSpeech(scene.captions.text, audioFile);
+
+        // Handle both legacy string return and new SpeechResult with timestamps
+        if (typeof speechResult === 'object' && 'audioPath' in speechResult) {
+          layout.narrationPath = speechResult.audioPath;
+          assetUrls[`voiceover_scene_${idx}`] = speechResult.audioPath;
+          // Inject word-level timestamps into captions for synchronized rendering
+          if (speechResult.wordTimestamps && speechResult.wordTimestamps.length > 0) {
+            (scene.captions as any).wordTimestamps = speechResult.wordTimestamps;
+            console.log(`[Memory Provider] 🎯 ${speechResult.wordTimestamps.length} word timestamps injected for scene ${idx + 1}`);
+          }
+        } else {
+          layout.narrationPath = speechResult;
+          assetUrls[`voiceover_scene_${idx}`] = speechResult as string;
+        }
 
         // Atualiza para a duração real do áudio gravado + margem para evitar corte seco
-        const realDurationMs = this.getAudioDurationMs(audioFile);
+        const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
         scene.durationMs = realDurationMs + 500; // +500ms respiro entre fala e corte
       }
 
