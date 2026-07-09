@@ -8,6 +8,67 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 
+// ─── Anti-CTA Guard ───────────────────────────────────────────────────────────
+// Canon: "KAIRO não pede, KAIRO entrega."
+// Detecta frases de call-to-action explícitas por regex, sem custo de LLM.
+// Cobre PT-BR (primário) e EN (fallback). Case-insensitive.
+const CTA_PATTERNS: RegExp[] = [
+  // Pedidos de like / curtida
+  /d[eê]\s*(um|um)\s*like/i,
+  /cur[ta]+/i,
+  /aperta\s*o\s*(like|curtir)/i,
+  // Pedidos de compartilhamento
+  /compartilh[ea]/i,
+  /manda\s*(pra|para)\s*(os\s*amigos|galera|alguém)/i,
+  // Pedidos de inscrição / seguir
+  /se\s*inscreva/i,
+  /inscri[çc][aã]o/i,
+  /seguir?\s*(o\s*canal|a\s*p[aá]gina|@)/i,
+  /siga\s*(o\s*canal|a\s*conta|@)/i,
+  /ativa.*sin[oa]/i,
+  // Pedidos de comentário
+  /coment[ae]/i,
+  /escreve\s*(nos\s*coment[aá]rios|aqui\s*embaixo)/i,
+  /deixa\s*(nos\s*coment[aá]rios|a\s*sua\s*opini)/i,
+  // Pedidos de salvar / favoritar
+  /salva\s*(esse|este|o)\s*v[íi]deo/i,
+  /adiciona\s*aos\s*(favoritos|salvos)/i,
+  // CTAs de notificação
+  /ativa.*notifica[çc][oõ]/i,
+  /clica\s*no\s*sininho/i,
+  // Padrões em inglês (fallback)
+  /like\s*(this|the)\s*video/i,
+  /subscribe/i,
+  /hit\s*the\s*(bell|like)/i,
+  /leave\s*a\s*comment/i,
+  /share\s*this\s*video/i,
+];
+
+/**
+ * Varre todas as seções do roteiro em busca de CTAs proibidos.
+ * Lança um erro descritivo se detectar qualquer violação.
+ * O Critic Agent captura esse erro e aciona retentativa automática.
+ */
+function assertNoCTA(script: Script, context: string = 'unknown'): void {
+  const candidates: { field: string; text: string }[] = [
+    { field: 'hook', text: script.hook },
+    { field: 'cta',  text: script.cta  },
+    ...script.body.map((s, i) => ({ field: `body[${i}]`, text: s.content })),
+  ];
+
+  for (const { field, text } of candidates) {
+    for (const pattern of CTA_PATTERNS) {
+      if (pattern.test(text)) {
+        throw new Error(
+          `[Anti-CTA] Violação do Canon em '${field}' (tentativa: ${context}): ` +
+          `padrão "${pattern}" detectado. ` +
+          `Texto: "${text.slice(0, 120)}..."`
+        );
+      }
+    }
+  }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -64,7 +125,7 @@ Regras OBRIGATÓRIAS:
 3. Varie o ritmo — misture frases curtas com longas
 4. Mantenha o significado e os fatos — apenas reformule a forma
 5. Preserve o gancho (hook) impactante
-6. O CTA deve soar como um convite genuíno, não como um comando
+6. CANON OBRIGATÓRIO: "KAIRO não pede, KAIRO entrega." — NUNCA inclua pedidos de like, compartilhamento, inscrição, comentário ou qualquer call-to-action explícito. O fechamento deve ser uma reflexão final ou uma pergunta retórica, nunca um comando ao espectador.
 7. Mantenha o comprimento aproximado de cada seção
 
 Resposta APENAS em JSON:
@@ -142,10 +203,18 @@ async function processScriptJob(job: Job<ScriptJobData>) {
         { "content": "texto da seção 1", "durationSeconds": 30, "visualNote": "ideia visual 1" },
         { "content": "texto da seção 2", "durationSeconds": 45, "visualNote": "ideia visual 2" }
       ],
-      "cta": "Chamada para ação final",
+      "cta": "Reflexão final ou pergunta retórica — NUNCA um pedido de like, inscrição, compartilhamento ou comentário (Canon: KAIRO não pede, KAIRO entrega)",
       "estimatedDurationSeconds": 90,
       "keywords": ["exatamente 4 hashtags relevantes para o TikTok, sem o caractere #, ex: futebol, copa, baggio, kairo"]
     }
+    
+    REGRA INVIOLÁVEL — CANON: "KAIRO não pede, KAIRO entrega."
+    Jamais inclua no roteiro (hook, body ou cta) qualquer variante de:
+    - "curta", "dê um like", "aperta o like"
+    - "compartilhe", "manda pra galera"
+    - "se inscreva", "siga o canal", "ativa o sininho"
+    - "comente", "deixa nos comentários"
+    O fechamento do vídeo deve ser uma reflexão, uma pergunta retórica ou uma frase de impacto — nunca um comando ao espectador.
   `;
 
   const responseJsonStr = await llm.complete(prompt, { task: 'script', jsonMode: true, temperature: 0.7 });
@@ -169,6 +238,12 @@ async function processScriptJob(job: Job<ScriptJobData>) {
     generatedAt: new Date(),
     version: attemptNumber,
   };
+
+  // ─── Anti-CTA Guard (pré-humanizer) ───────────────────────────────────────
+  // Rejeita o roteiro imediatamente se o LLM violou o Canon — sem custo extra.
+  // O Worker do BullMQ captura o erro e aciona retentativa automática.
+  assertNoCTA(script, `tentativa-${attemptNumber}`);
+  console.log(`[Script Agent] ✅ Anti-CTA: roteiro aprovado (nenhuma violação detectada).`);
 
   // ─── Humanizer Pass ────────────────────────────────────────────────────────
   // Reformula o roteiro em voz humana PT-BR antes de enviar para aprovação
