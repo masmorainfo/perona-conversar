@@ -1,0 +1,33 @@
+{
+  "area": "linguagem_visual",
+  "version": 2,
+  "entries": [
+    {
+      "id": "abstraction_over_likeness",
+      "title": "Abstração sobre Semelhança: A Silhueta como Sujeito",
+      "principle": "KAIRO nunca tenta retratar um rosto real por IA. O sujeito de uma história é representado por silhueta, símbolo ou objeto evocativo — nunca por likeness gerado por máquina.",
+      "rationale": "Geração de IA produz rostos incorretos e freqüentemente grotescos, criando alienação imediata no espectador que conhece o sujeito real. A silhueta preserva a projeção emocional: o espectador projeta o rosto que conhece, tornando a cena mais poderosa do que qualquer likeness sintetizado. Esta técnica também elimina riscos de direitos de imagem.",
+      "application": {
+        "subject_scenes": "Cenas onde a âncora visual é o próprio sujeito (jogador, atleta, pessoa) → usar abstração: silhueta contra luz, mãos sem rosto, objeto pessoal (chuteira, número de camisa), sombra dramática.",
+        "context_scenes": "Cenas onde a âncora visual é cenário ou objeto (estádio, trofu, hospital, multidão) → priorizar imagem real licenciada (Wikimedia Commons CC0/CC-BY) ou IA de ambiente sem person.",
+        "fixed_rules": [
+          "Hook: sempre 'context' — energia visual máxima, sem restrição de abstração",
+          "CTA: sempre 'context' — fechamento com ambiente, nunca silhueta",
+          "Silêncios Canon: sempre 'context' — plano estático de ambiente"
+        ]
+      },
+      "references": ["visual_essay", "unspoken_subtext"],
+      "implementation": {
+        "prompt_prefix": "CRITICAL: Do NOT render any human face, recognizable portrait, or likeness. Instead use: silhouette of a figure, a symbolic object, or an atmospheric environment. No face. No portrait. Abstraction and symbolism only.",
+        "classification_field": "sceneSubject ('subject' | 'context') em PlannedScene",
+        "files": [
+          "apps/agents/media/src/storyboard-planner.ts (classifySceneSubject)",
+          "apps/agents/media/src/memory-provider.ts (resolveVisualSource, buildArchetypePrompt)"
+        ]
+      },
+      "maturity": "Validado",
+      "created_at": "2026-07-10",
+      "origin": "Decisão editorial tomada na Onda B do canal @90kairo após falhas com geração de rosto por IA no vídeo do Kaká."
+    }
+  ]
+}

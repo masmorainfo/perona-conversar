@@ -125,13 +125,26 @@ export class MemoryProvider {
   }
 
   /**
-   * Decide a fonte visual para uma cena: ativo autêntico ou fallback IA.
-   * Log explícito do motivo da decisão.
+   * Decide a fonte visual para uma cena: ativo autêntico, abstração de sujeito, ou fallback IA de cenário.
+   *
+   * Canon Onda B:
+   *   'subject' → rosto de pessoa NUNCA gerado por IA → retorna 'ai_abstraction:<idx>' (silúueta/símbolo)
+   *   'context' → comportamento anterior: busca autêntica → match ou 'ai_visual:<idx>' (ambiente)
    */
   private resolveVisualSource(
     visualDescription: string,
-    sceneIndex: number
-  ): { mediaPath: string; isAiFallback: boolean } {
+    sceneIndex: number,
+    sceneSubject: 'subject' | 'context'
+  ): { mediaPath: string; isAiFallback: boolean; isAbstraction: boolean } {
+    // Cena de sujeito: nunca tenta buscar imagem real nem gerar rosto
+    if (sceneSubject === 'subject') {
+      console.log(
+        `[Memory Provider] 🟣 ABSTRAÇÃO cena ${sceneIndex}: sujeito humano — silhueta/símbolo (sem rosto por IA)`
+      );
+      return { mediaPath: `ai_abstraction:${sceneIndex}`, isAiFallback: true, isAbstraction: true };
+    }
+
+    // Cena de contexto: comportamento original (busca autêntica ou IA de ambiente)
     const matches = this.findAuthenticAssets(visualDescription);
 
     if (matches.length > 0) {
@@ -140,14 +153,14 @@ export class MemoryProvider {
         `[Memory Provider] 🟢 AUTÊNTICO cena ${sceneIndex}: "${best.asset.filename}" ` +
         `(score: ${best.score.toFixed(2)}, tags: [${best.asset.tags.join(', ')}])`
       );
-      return { mediaPath: best.fullPath, isAiFallback: false };
+      return { mediaPath: best.fullPath, isAiFallback: false, isAbstraction: false };
     }
 
     console.log(
       `[Memory Provider] 🟡 FALLBACK IA cena ${sceneIndex}: nenhum match acima de ${MATCH_THRESHOLD} ` +
       `para "${visualDescription.substring(0, 80)}..."`
     );
-    return { mediaPath: `ai_visual:${sceneIndex}`, isAiFallback: true };
+    return { mediaPath: `ai_visual:${sceneIndex}`, isAiFallback: true, isAbstraction: false };
   }
 
   /**
@@ -201,12 +214,21 @@ export class MemoryProvider {
         durationMs = Math.max(3000, Math.ceil((wordCount / 3) * 1000) + 1000);
       }
 
-      // 2. Resolver Mídia Visual (Autêntica ou Fallback)
-      const visualSource = this.resolveVisualSource(pScene.visualDescription, idx);
+      // 2. Resolver Mídia Visual (Autêntica, Abstração ou Fallback IA de ambiente)
+      const visualSource = this.resolveVisualSource(
+        pScene.visualDescription,
+        idx,
+        pScene.sceneSubject
+      );
       mediaPath = visualSource.mediaPath;
 
       const aiPrompt = direction.canonArchetype !== 'default'
-        ? this.buildArchetypePrompt(direction.canonArchetype as any, pScene.visualDescription, pScene.text)
+        ? this.buildArchetypePrompt(
+            direction.canonArchetype as any,
+            pScene.visualDescription,
+            pScene.text,
+            visualSource.isAbstraction
+          )
         : `Cinematic sports photography, clean composition, vertical 9:16. Subject: ${pScene.visualDescription}`;
 
       // 3. Montar a TechnicalSceneProps
@@ -224,8 +246,9 @@ export class MemoryProvider {
           effect: pScene.effect as any,
           ...(narrationPath ? { narrationPath } : {}),
           cameraMovement: pScene.cameraMovement,
-          aiPrompt, // Guarda o prompt para síntese futura
-          isAiFallback: visualSource.isAiFallback
+          aiPrompt,
+          isAiFallback: visualSource.isAiFallback,
+          isAbstraction: visualSource.isAbstraction,
         } as any,
         captions: {
           text: pScene.text,
@@ -313,10 +336,15 @@ export class MemoryProvider {
       }
 
       // 2. Gera imagem de IA se necessário
-      if (layout.mediaUrl && layout.mediaUrl.startsWith('ai_visual:')) {
+      if (layout.mediaUrl && (layout.mediaUrl.startsWith('ai_visual:') || layout.mediaUrl.startsWith('ai_abstraction:'))) {
         const visualFile = path.join(assetsDir, `visual_scene_${idx}.jpg`);
-        console.log(`[Memory Provider] [IA Visual] Gerando imagem para cena ${idx + 1}...`);
-        await imageProvider.generateImage(layout.aiPrompt, visualFile);
+        const prompt = layout.isAbstraction
+          ? `[ABSTRAÇÃO] ${layout.aiPrompt}`
+          : layout.aiPrompt;
+        console.log(
+          `[Memory Provider] [IA Visual${layout.isAbstraction ? ' ABSTRAÇÃO' : ''}] Gerando imagem para cena ${idx + 1}...`
+        );
+        await imageProvider.generateImage(prompt, visualFile);
         layout.mediaUrl = visualFile;
         assetUrls[`visual_scene_${idx}`] = visualFile;
       } else if (layout.mediaUrl && fs.existsSync(layout.mediaUrl)) {
@@ -336,11 +364,27 @@ export class MemoryProvider {
 
   /**
    * Gera prompt de imagem IA separando MOOD (do arquétipo) de CONTEÚDO (da cena).
-   * O arquétipo define cor, luz e atmosfera. A narração define o que aparece na cena.
-   * Isso garante que cada cena tenha uma composição visual distinta.
+   *
+   * Quando isAbstraction=true (cena de sujeito):
+   *   Injeta ABSTRACTION_PREFIX que proibe explicitamente rosto/retrato.
+   *   A composição é direcionada a silúueta, símbolo ou ambiente evocativo.
+   *
+   * Quando isAbstraction=false (cena de cenário/objeto):
+   *   Comportamento original: mood prefix + conteúdo derivado da narração.
    */
-  private buildArchetypePrompt(archetype: CanonArchetype, description: string, narrationText?: string): string {
-    // Mood prefix: define COR + LUZ + ATMOSFERA (sem cenas específicas como "silhueta" ou "estádio")
+  private buildArchetypePrompt(
+    archetype: CanonArchetype,
+    description: string,
+    narrationText?: string,
+    isAbstraction?: boolean
+  ): string {
+    // Canon Onda B: abstração de sujeito — proibir rosto/retrato explicitamente
+    const ABSTRACTION_PREFIX =
+      `CRITICAL: Do NOT render any human face, recognizable portrait, or likeness. ` +
+      `Instead use: silhouette of a figure, a symbolic object, or an atmospheric environment. ` +
+      `No face. No portrait. Abstraction and symbolism only. `;
+
+    // Mood prefix: define COR + LUZ + ATMOSFERA (sem cenas específicas)
     const moods: Record<CanonArchetype, string> = {
       heroi_tragico: `Cinematic photography, extreme chiaroscuro lighting, deep black shadows, steel blue and charcoal gray tones. Tragic dignity.`,
       exilado_que_retorna: `Cinematic warm photography, amber golden hour light, nostalgic film grain, soft atmospheric glow. Melancholy hope.`,
@@ -355,7 +399,15 @@ export class MemoryProvider {
       sceneContent = this.deriveVisualFromNarration(narrationText);
     }
 
-    return `${moods[archetype]} Vertical 9:16, photorealistic. Scene: ${sceneContent}`;
+    const moodPrefix = moods[archetype];
+    const sceneClause = `Vertical 9:16, photorealistic. Scene: ${sceneContent}`;
+
+    // Abstração: prefixo de proibição de rosto ANTES do mood (ordem importa para modelos de imagem)
+    if (isAbstraction) {
+      return `${ABSTRACTION_PREFIX}${moodPrefix} ${sceneClause}`;
+    }
+
+    return `${moodPrefix} ${sceneClause}`;
   }
 
   /** Detecta se o visualDescription é genérico e precisa ser enriquecido */
