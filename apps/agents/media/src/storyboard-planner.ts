@@ -32,9 +32,57 @@ function classifySceneSubject(visualNote: string): 'subject' | 'context' {
     'jogador', 'atleta', 'craque', 'homem', 'menino', 'garoto', 'figura',
     // Pronomes que indicam o sujeito da história
     'ele ', 'ela ', 'herói',
-    // Nomes recorrentes no canal — expandir aqui sob demanda
-    'kaká', 'kaka', 'baggio', 'ronaldo', 'zidane', 'messi', 'neymar',
-    'beckham', 'henry', 'shevchenko', 'inzaghi', 'totti', 'pirlo',
+
+    // ── Brasileiros lendários ──────────────────────────────────────────────
+    'kaká', 'kaka',
+    'ronaldo',         // Ronaldo Fenômeno
+    'ronaldinho',      // Ronaldinho Gaúcho
+    'roberto carlos',
+    'rivaldo',
+    'neymar',
+    'garrincha',
+    'romário',
+    'romario',
+    'adriano',
+
+    // ── Italianos clássicos (canal com forte viés Serie A / AC Milan) ──────
+    'baggio',
+    'totti',
+    'pirlo',
+    'inzaghi',
+    'del piero',
+    'delpiero',
+    'vieri',
+    'maldini',
+    'cannavaro',
+    'buffon',
+    'nedved',
+
+    // ── Europeus era de ouro (90s–2010s) ──────────────────────────────────
+    'zidane',
+    'beckham',
+    'henry',
+    'shevchenko',
+    'figo',
+    'raul',
+    'van nistelrooy',
+    'rooney',
+    'gerrard',
+    'lampard',
+    'xavi',
+    'iniesta',
+    'ibrahimovic',
+    'ibra',
+    'modric',
+
+    // ── Estrelas atuais recorrentes no futebol mundial ────────────────────
+    'messi',
+    'haaland',
+    'mbappe',
+    'mbappé',
+    'salah',
+    'vinicius',
+    'vini',
   ];
   if (subjectKeywords.some(kw => lower.includes(kw))) return 'subject';
   return 'context'; // fallback conservador
