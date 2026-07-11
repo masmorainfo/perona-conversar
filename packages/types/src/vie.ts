@@ -123,6 +123,8 @@ export interface TechnicalSceneProps {
     mediaUrl: string
     secondaryMediaUrl?: string
     panZoomSpeed?: number // 0 for no movement
+    /** Onda C: peso retórico propagado do storyboard para decisões de render. */
+    rhetoricalWeight?: 'normal' | 'emphasis' | 'critical'
   }
   
   captions: {
@@ -159,6 +161,8 @@ export interface RenderManifest {
     bgmUrl: string
     bgmVolume: number // 0 a 1
     sfxEvents: { timestampMs: number; url: string; volume: number }[]
+    /** Onda C: duração total do vídeo em ms — usado pelo masterAudio() para calcular fade-out da BGM. */
+    totalDurationMs?: number
   }
   
   scenes: TechnicalSceneProps[]
