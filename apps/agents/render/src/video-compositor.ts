@@ -245,21 +245,17 @@ async function renderWithFFmpeg(
 }
 
 /**
- * Mixes a background music (BGM) track into an existing video with voiceover,
- * applying a fade-out to the BGM at the end.
+ * Aplica um fade-out no áudio final (master) de um vídeo que já possui 
+ * narração e BGM combinados.
  *
- * @param inputVideoPath Path to the video file (must contain the voiceover audio)
- * @param outputVideoPath Path where the final video with BGM will be saved
- * @param bgmPath Path to the background music file
+ * @param inputVideoPath Path to the video file (must contain the combined audio)
+ * @param outputVideoPath Path where the final video with faded audio will be saved
  * @param totalDurationMs Total duration of the video in milliseconds
- * @param bgmVolume Volume of the background music (0.0 to 1.0)
  */
 export async function masterAudio(
   inputVideoPath: string,
   outputVideoPath: string,
-  bgmPath: string,
-  totalDurationMs: number,
-  bgmVolume: number = 1.0
+  totalDurationMs: number
 ): Promise<void> {
   const defaultFadeDurationMs = Math.min(2000, totalDurationMs * 0.05);
   const envFadeDuration = process.env.BGM_FADE_DURATION_MS 
@@ -272,12 +268,10 @@ export async function masterAudio(
   const fadeStartSec = fadeStartMs / 1000;
   const fadeDurationSec = fadeDurationMs / 1000;
 
-  console.log(`[Video Compositor] masterAudio: Applying BGM with fade-out. Start: ${fadeStartSec}s, Duration: ${fadeDurationSec}s`);
+  console.log(`[Video Compositor] masterAudio: Applying master fade-out. Start: ${fadeStartSec}s, Duration: ${fadeDurationSec}s`);
 
-  // ffmpeg command to mix BGM with voiceover. 
-  // [1:a] is BGM, [0:a] is voiceover.
-  // afade=t=out is applied to BGM.
-  const ffmpegCmd = `ffmpeg -nostdin -y -i "${inputVideoPath}" -i "${bgmPath}" -filter_complex "[1:a]volume=${bgmVolume},afade=t=out:st=${fadeStartSec}:d=${fadeDurationSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[outa]" -map 0:v -map "[outa]" -c:v copy -c:a aac -b:a 192k "${outputVideoPath}"`;
+  // ffmpeg command to apply audio fade-out (afade) to the existing audio stream.
+  const ffmpegCmd = `ffmpeg -nostdin -y -i "${inputVideoPath}" -af "afade=t=out:st=${fadeStartSec}:d=${fadeDurationSec}" -c:v copy -c:a aac -b:a 192k "${outputVideoPath}"`;
 
   try {
     await execAsync(ffmpegCmd);

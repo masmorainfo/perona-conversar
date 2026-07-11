@@ -242,7 +242,9 @@ export class MemoryProvider {
         layout: {
           type: 'fullscreen',
           mediaUrl: mediaPath,
-          panZoomSpeed: pScene.cameraMovement === 'still' ? 0 : 1.15,
+          // Onda C: panZoomSpeed propagado do storyboard-planner (não mais binário still/1.15)
+          panZoomSpeed: pScene.panZoomSpeed ?? (pScene.cameraMovement === 'still' ? 0 : 1.15),
+          rhetoricalWeight: pScene.rhetoricalWeight ?? 'normal',
           effect: pScene.effect as any,
           ...(narrationPath ? { narrationPath } : {}),
           cameraMovement: pScene.cameraMovement,
@@ -282,6 +284,8 @@ export class MemoryProvider {
         bgmUrl: direction.audio.bgmName,
         bgmVolume: direction.audio.bgmVolume,
         sfxEvents: [],
+        // Onda C: totalDurationMs necessário para calcular FADE_START no pós-processamento FFmpeg
+        totalDurationMs: scenes.reduce((acc, s) => acc + s.durationMs, 0),
       },
       scenes,
     };
@@ -332,7 +336,8 @@ export class MemoryProvider {
 
         // Atualiza para a duração real do áudio gravado + margem para evitar corte seco
         const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
-        scene.durationMs = realDurationMs + 500; // +500ms respiro entre fala e corte
+        // Onda C: margem aumentada 500ms → 800ms para evitar corte seco (ElevenLabs tem latência ligeiramente maior)
+        scene.durationMs = realDurationMs + 800;
       }
 
       // 2. Gera imagem de IA se necessário
