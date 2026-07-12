@@ -12,6 +12,7 @@ export type NotificationEventType =
   | 'EDITORIAL_REJECTED'
   | 'ABANDONED'
   | 'CRITIC_STUCK'
+  | 'FAILED_QA'
   | 'JOB_FAILED'
   | 'HEARTBEAT'
   | 'VLS_EXPERIMENT_STARTED'
@@ -138,6 +139,18 @@ export function formatEvent(
         `🆔 ID: \`${id}\``,
         ``,
         `Verifique o Mission Control para intervir manualmente.`,
+      ].join('\n');
+
+    case 'FAILED_QA':
+      return [
+        `🚨 *Falha de Qualidade Técnica (QA)*`,
+        ``,
+        `📌 Tópico: ${topic}`,
+        `📺 Canal:${channel}`,
+        `🆔 ID: \`${id}\``,
+        `📋 Motivo: ${escapeMarkdown(payload.reason ?? 'Silêncio detectado (bloqueio determinístico)')}`,
+        ``,
+        `O render falhou na verificação técnica final. O vídeo não avançará para PENDING_REVIEW.`,
       ].join('\n');
 
     case 'JOB_FAILED':

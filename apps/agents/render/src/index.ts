@@ -44,11 +44,32 @@ async function processRenderJob(job: Job<RenderJobData>) {
   // Run the actual compositor using FFmpeg
   await compositeVideo(contentId, script, assetUrls, videoFilePath, canonArchetype);
 
+  // --- ÁUDIO QA ---
+  const { runAudioQA } = await import('./audio-qa.js');
+  const qaResult = await runAudioQA(videoFilePath);
+
+  if (qaResult.failed) {
+    console.error(`[Render Engine] 🚨 Falha técnica no áudio (silêncio bloqueante >= 1s). Max silêncio: ${qaResult.maxSilenceDuration}s`);
+    await supervisorQueue.add('QA_FAIL_DETERMINISTIC', {
+      contentId,
+      channelId,
+      reason: `Falha na verificação técnica de áudio: silêncio de ${qaResult.maxSilenceDuration.toFixed(2)}s contínuo. Limite: 1.0s (-40dB).`
+    });
+    return; // Aborta e não envia RENDER_RESULT
+  }
+
+  // --- SUCCESS ---
   const resultData: RenderResultData = {
     contentId,
     channelId,
     videoFilePath,
   };
+
+  // Acopla alertas de QA (warn) se houver
+  if (qaResult.warn) {
+    console.warn(`[Render Engine] ⚠️ Alertas de QA gerados:`, qaResult.warnings);
+    (resultData as any).qaWarnings = qaResult.warnings;
+  }
 
   await supervisorQueue.add('RENDER_RESULT', resultData);
   console.log(`[Render Engine] Vídeo renderizado com sucesso em: ${videoFilePath}`);

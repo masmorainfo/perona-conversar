@@ -65,6 +65,9 @@ export async function compositeVideo(
   let remotionInputProps: any = null;
   let totalFrames = 0;
 
+  let bgmToMix: string | null = null;
+  let bgmVolumeToMix = 0.20;
+
   // 1. Tentar ler do Story Manifest se disponível
   if (assetUrls && assetUrls.storyManifest && fs.existsSync(assetUrls.storyManifest)) {
     try {
@@ -75,15 +78,18 @@ export async function compositeVideo(
       // Converter todos os caminhos locais do manifest para Base64 data URLs
       const memoriesDir = path.join(process.cwd(), 'packages/knowledge/memories');
       
-      // Converter trilha sonora (BGM) se informada
+      // Extrair trilha sonora (BGM) para ser mixada via FFmpeg depois do Remotion
       if (manifest.audioContext.bgmUrl) {
         const bgmPath = path.isAbsolute(manifest.audioContext.bgmUrl)
           ? manifest.audioContext.bgmUrl
           : path.join(memoriesDir, manifest.audioContext.bgmUrl);
 
         if (fs.existsSync(bgmPath)) {
-          console.log(`[Video Compositor] 🎵 Convertendo trilha sonora: ${bgmPath}`);
-          manifest.audioContext.bgmUrl = fileToDataURL(bgmPath);
+          console.log(`[Video Compositor] 🎵 Trilha sonora separada para FFmpeg mix: ${bgmPath}`);
+          bgmToMix = bgmPath;
+          bgmVolumeToMix = manifest.audioContext.bgmVolume ?? 0.20;
+          // Remover do manifest para que o Chromium/Remotion não tente carregar (evita base64 limit e CORS errors)
+          manifest.audioContext.bgmUrl = '';
         } else {
           console.warn(`[Video Compositor] ⚠️ Trilha sonora não encontrada no disco: ${bgmPath}. Renderizando sem música de fundo.`);
           manifest.audioContext.bgmUrl = '';
@@ -119,8 +125,8 @@ export async function compositeVideo(
     const sections: any[] = [];
     for (let idx = 0; idx < script.body.length; idx++) {
       const section = script.body[idx];
-      const audioPath = assetUrls[`voiceover_sec_${idx}`];
-      const imagePath = assetUrls[`visual_sec_${idx}`];
+      let audioPath = assetUrls[`voiceover_sec_${idx}`] || assetUrls[`voiceover_scene_${idx}`];
+      let imagePath = assetUrls[`visual_sec_${idx}`] || assetUrls[`visual_scene_${idx}`];
 
       if (!audioPath || !imagePath) {
         throw new Error(`Missing audio or image for section ${idx}`);
@@ -187,6 +193,19 @@ export async function compositeVideo(
     });
 
     console.log(`[Video Compositor] Remotion render concluído com sucesso!`);
+
+    if (bgmToMix) {
+      console.log(`[Video Compositor] Misturando BGM via FFmpeg...`);
+      const tempOutput = outputVideoPath.replace('.mp4', '_temp_nobgm.mp4');
+      fs.renameSync(outputVideoPath, tempOutput);
+      
+      const mixCmd = `ffmpeg -nostdin -y -i "${tempOutput}" -stream_loop -1 -i "${bgmToMix}" -filter_complex "[1:a]volume=${bgmVolumeToMix}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0" -c:v copy -c:a aac -b:a 192k "${outputVideoPath}"`;
+      
+      await execAsync(mixCmd);
+      fs.unlinkSync(tempOutput);
+      console.log(`[Video Compositor] BGM mix concluído!`);
+    }
+
   } catch (remotionError) {
     console.warn(`[Video Compositor] Remotion rendering failed. Falling back to FFmpeg compositor:`, remotionError);
     
@@ -212,8 +231,8 @@ async function renderWithFFmpeg(
   try {
     // 1. Generate video for each section
     for (let idx = 0; idx < script.body.length; idx++) {
-      const audioPath = assetUrls[`voiceover_sec_${idx}`];
-      const imagePath = assetUrls[`visual_sec_${idx}`];
+      const audioPath = assetUrls[`voiceover_sec_${idx}`] || assetUrls[`voiceover_scene_${idx}`];
+      const imagePath = assetUrls[`visual_sec_${idx}`] || assetUrls[`visual_scene_${idx}`];
       const sectionVideoPath = path.join(tempDir, `section_${idx}.mp4`);
 
       console.log(`[FFmpeg Compositor] Rendering section ${idx} to ${sectionVideoPath}`);

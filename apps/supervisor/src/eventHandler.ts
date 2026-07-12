@@ -225,6 +225,9 @@ export async function processEvent(
     } else if (currentDbState.state === 'SCRIPTED' && nextStateValue === 'EVALUATED' && criticFailCount >= 3) {
       // Roteiro voltou a EVALUATED após 3 falhas do Critic — alerta de travamento
       notify('CRITIC_STUCK', { contentId, topic, ...withChannel }).catch(() => {});
+    } else if (nextStateValue === 'FAILED_QA') {
+      const reason = jobData.reason as string | undefined;
+      notify('FAILED_QA', { contentId, topic, ...withChannel, ...(reason ? { reason } : {}) }).catch(() => {});
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -340,7 +343,7 @@ function mapJobToEvent(jobType: string, data: any): ContentMachineEvent | null {
     case 'MEDIA_RESULT':
       return { type: 'MEDIA_COMPLETE', assetUrls: data.assetUrls };
     case 'RENDER_RESULT':
-      return { type: 'RENDER_COMPLETE', videoFile: data.videoFilePath };
+      return { type: 'RENDER_COMPLETE', videoFile: data.videoFilePath, qaWarnings: data.qaWarnings };
     case 'QUALITY_RESULT':
       if (data.approved) return { type: 'QC_PASS', score: data.score, checklist: data.checklist };
       else return { type: 'QC_FAIL', reason: data.reason || 'Failed QC' };
@@ -360,6 +363,8 @@ function mapJobToEvent(jobType: string, data: any): ContentMachineEvent | null {
       return { type: 'LEARNING_COMPLETE' };
     case 'ABANDON_REQUEST':
       return { type: 'ABANDON', reason: data.reason || 'Manual abandon' };
+    case 'QA_FAIL_DETERMINISTIC':
+      return { type: 'QA_FAIL_DETERMINISTIC', reason: data.reason || 'QA failure' };
     // CYCLE_STARTED é interceptado em handleSupervisorEvent antes de chegar aqui.
     // Este case é apenas uma salvaguarda defensiva.
     case 'CYCLE_STARTED':

@@ -40,9 +40,10 @@ export type ContentMachineEvent =
   | { type: 'CRITIC_FAIL'; evaluation: ContentMachineMetadata }
   | { type: 'STORYBOARD_COMPLETE'; manifestPath: string }
   | { type: 'MEDIA_COMPLETE'; assetUrls: Record<string, string> }
-  | { type: 'RENDER_COMPLETE'; videoFile: string }
+  | { type: 'RENDER_COMPLETE'; videoFile: string; qaWarnings?: string[] }
   | { type: 'QC_PASS'; score: number; checklist: ContentMachineMetadata }
   | { type: 'QC_FAIL'; reason: string }
+  | { type: 'QA_FAIL_DETERMINISTIC'; reason: string }
   | { type: 'CINEMATIC_PASS'; evaluation: ContentMachineMetadata }
   | { type: 'CINEMATIC_FAIL'; evaluation: ContentMachineMetadata }
   | { type: 'PUBLISH_COMPLETE'; results: ContentMachineMetadata[] }
@@ -159,7 +160,11 @@ export const contentMachine = setup({
     setVideo: assign({
       metadata: ({ context, event }) => {
         if (event.type !== 'RENDER_COMPLETE') return context.metadata
-        return { ...context.metadata, videoFile: event.videoFile }
+        return { 
+          ...context.metadata, 
+          videoFile: event.videoFile,
+          ...(event.qaWarnings ? { qaWarnings: event.qaWarnings } : {})
+        }
       },
     }),
     setQcOk: assign({
@@ -281,6 +286,7 @@ export const contentMachine = setup({
     PRODUCED: {
       on: {
         RENDER_COMPLETE: { target: 'RENDERED', actions: 'setVideo' },
+        QA_FAIL_DETERMINISTIC: 'FAILED_QA',
         ABANDON: 'ABANDONED',
       },
     },
@@ -299,6 +305,13 @@ export const contentMachine = setup({
             actions: 'incrementQcFail',
           },
         ],
+        QA_FAIL_DETERMINISTIC: 'FAILED_QA',
+        ABANDON: 'ABANDONED',
+      },
+    },
+
+    FAILED_QA: {
+      on: {
         ABANDON: 'ABANDONED',
       },
     },
