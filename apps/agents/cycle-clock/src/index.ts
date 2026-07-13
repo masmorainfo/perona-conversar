@@ -30,7 +30,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Queue } from 'bullmq';
 import pg from 'pg';
+import { CronJob } from 'cron';
 import { SUPERVISOR_QUEUE } from '@cos/events';
+import { sendTelegram } from '@cos/notifications';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,11 +42,17 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 // ─── Configuração ──────────────────────────────────────────────────────────────
 
 /**
- * Intervalo entre ciclos em horas.
- * Default: 6 horas — ajustável via variável de ambiente.
+ * Expressões cronográficas para disparo dos ciclos operacionais.
+ * Horários-alvo: 12:20, 18:35, 20:50 (BRT)
+ * Antecedência de segurança: -2 horas (10:20, 16:35, 18:50)
  */
-const CYCLE_INTERVAL_HOURS = parseFloat(process.env['CYCLE_INTERVAL_HOURS'] ?? '6');
-const CYCLE_INTERVAL_MS = CYCLE_INTERVAL_HOURS * 60 * 60 * 1000;
+const CRON_SCHEDULES = [
+  '20 10 * * *', // Disparo para o alvo das 12:20
+  '35 16 * * *', // Disparo para o alvo das 18:35
+  '50 18 * * *'  // Disparo para o alvo das 20:50
+];
+
+const TIMEZONE = 'America/Sao_Paulo';
 
 /**
  * Máximo de oportunidades injetadas por canal por ciclo.
@@ -70,6 +78,11 @@ const redisConnection = {
   host: redisUrl.hostname,
   port: parseInt(redisUrl.port || '6379', 10),
   password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined,
+};
+
+const telegramConfig = {
+  botToken: process.env['TELEGRAM_BOT_TOKEN'] ?? '',
+  chatId: process.env['TELEGRAM_CHAT_ID'] ?? ''
 };
 
 const supervisorQueue = new Queue(SUPERVISOR_QUEUE, { connection: redisConnection });
@@ -130,6 +143,32 @@ async function runCycle(reason: 'scheduled' | 'startup'): Promise<CycleResult> {
   for (const channel of channels) {
     const channelLog = { opportunitiesFound: 0, triggered: false };
     result.channelDetails[channel.slug] = channelLog;
+
+    // --- PROTEÇÃO DE CONCORRÊNCIA ---
+    // Verifica se o canal já possui um conteúdo em processo de produção.
+    const { rows: activeUnits } = await pool.query<{ id: string; state: string }>(`
+      SELECT id, state 
+      FROM content_units 
+      WHERE channel_id = $1 
+      AND state NOT IN ('PUBLISHED', 'PUBLISHED_PARTIAL', 'ANALYZED', 'LEARNED', 'REJECTED', 'ABANDONED', 'DEFERRED')
+      LIMIT 1
+    `, [channel.id]);
+
+    if (activeUnits.length > 0) {
+      console.log(
+        `[Cycle Clock]   ${channel.slug}: Produção ocupada (Conteúdo ${activeUnits[0]?.id} no estado ${activeUnits[0]?.state}). Ignorando.`
+      );
+      
+      if (telegramConfig.botToken && telegramConfig.chatId) {
+        const timeNow = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: TIMEZONE });
+        const skipMessage = `⏭️ Horário das ${timeNow} pulado — vídeo anterior do canal *${channel.slug}* ainda em processamento (estado: \`${activeUnits[0]?.state}\`).`;
+        await sendTelegram(skipMessage, telegramConfig, 'Markdown').catch((err: unknown) => {
+          console.warn('[Cycle Clock] Falha ao notificar Telegram sobre o skip:', err);
+        });
+      }
+
+      continue;
+    }
 
     // Busca oportunidades QUEUED para este canal, ordenadas por score descendente
     const { rows: opportunities } = await pool.query<{
@@ -216,7 +255,7 @@ async function bootstrap(): Promise<void> {
   console.log('╔══════════════════════════════════════════════════╗');
   console.log('║         COS — Cycle Clock iniciando...          ║');
   console.log('╚══════════════════════════════════════════════════╝');
-  console.log(`  Intervalo: ${CYCLE_INTERVAL_HOURS}h`);
+  console.log(`  Cron Schedules: ${CRON_SCHEDULES.join(', ')} (${TIMEZONE})`);
   console.log(`  Máx. oportunidades por canal por ciclo: ${MAX_OPPORTUNITIES_PER_CHANNEL}`);
   console.log(`  Supervisor Queue: ${SUPERVISOR_QUEUE}`);
   console.log('');
@@ -234,13 +273,21 @@ async function bootstrap(): Promise<void> {
   await runCycle('startup');
 
   // Agenda ciclos recorrentes
-  setInterval(() => {
-    runCycle('scheduled').catch(err => {
-      console.error('[Cycle Clock] Erro no ciclo agendado:', err);
-    });
-  }, CYCLE_INTERVAL_MS);
-
-  console.log(`[Cycle Clock] ✓ Próximo ciclo em ${CYCLE_INTERVAL_HOURS}h`);
+  for (const schedule of CRON_SCHEDULES) {
+    const job = new CronJob(
+      schedule,
+      () => {
+        console.log(`\n[Cycle Clock] Disparo cronômétrico acionado: ${schedule}`);
+        runCycle('scheduled').catch(err => {
+          console.error('[Cycle Clock] Erro no ciclo agendado:', err);
+        });
+      },
+      null,
+      true,
+      TIMEZONE
+    );
+    console.log(`[Cycle Clock] ✓ Cron job agendado: ${schedule} (${TIMEZONE})`);
+  }
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {

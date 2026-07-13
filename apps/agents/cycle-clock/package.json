@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@cos/events": "workspace:*",
+    "@cos/notifications": "workspace:*",
     "@cos/types": "workspace:*",
     "bullmq": "^5.0.0",
+    "cron": "^4.4.0",
     "dotenv": "^16.0.0",
     "pg": "^8.22.0"
   },

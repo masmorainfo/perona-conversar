@@ -18,7 +18,7 @@ import { sendTelegram, type TelegramConfig, type TelegramInlineKeyboardMarkup, t
 import { formatEvent, type NotificationEventType, type EventPayload } from './events.js';
 
 export type { NotificationEventType, EventPayload } from './events.js';
-export { getUpdates, editTelegramMessage, answerCallbackQuery } from './telegram.js';
+export { sendTelegram, getUpdates, editTelegramMessage, answerCallbackQuery } from './telegram.js';
 export type { TelegramUpdate, TelegramInlineKeyboardButton, TelegramInlineKeyboardMarkup, SendResult } from './telegram.js';
 
 let _config: TelegramConfig | null = null;
