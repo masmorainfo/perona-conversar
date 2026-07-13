@@ -7,6 +7,7 @@ import type { CanonArchetype, RenderManifest } from '@cos/types';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
 
 const execAsync = promisify(exec);
 
@@ -28,23 +29,7 @@ function getAudioDuration(audioPath: string): number {
   }
 }
 
-function fileToDataURL(filePath: string): string {
-  const resolved = path.resolve(filePath);
-  if (!fs.existsSync(resolved)) {
-    console.warn(`[Video Compositor] Warning: File not found: ${resolved}`);
-    return filePath;
-  }
-  const ext = path.extname(resolved).toLowerCase();
-  let mimeType = 'image/jpeg';
-  if (ext === '.png') mimeType = 'image/png';
-  else if (ext === '.webp') mimeType = 'image/webp';
-  else if (ext === '.mp3') mimeType = 'audio/mp3';
-  else if (ext === '.wav') mimeType = 'audio/wav';
-  else if (ext === '.ogg') mimeType = 'audio/ogg';
 
-  const base64 = fs.readFileSync(resolved).toString('base64');
-  return `data:${mimeType};base64,${base64}`;
-}
 
 export async function compositeVideo(
   contentId: string,
@@ -61,12 +46,60 @@ export async function compositeVideo(
     return;
   }
 
+  // --- LOCAL ASSET SERVER ---
+  // Starts a local HTTP server to serve absolute files directly to the Chromium instance.
+  // This avoids file:/// CORS and net::ERR_UNKNOWN_URL_SCHEME issues on Windows.
+  let localServer: http.Server | null = null;
+  let localServerPort = 0;
+
+  await new Promise<void>((resolve, reject) => {
+    localServer = http.createServer((req, res) => {
+      try {
+        const urlParsed = new URL(req.url || '/', `http://${req.headers.host}`);
+        const filePath = urlParsed.searchParams.get('path');
+
+        if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeTypes: Record<string, string> = {
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.png': 'image/png', '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav', '.mp4': 'video/mp4'
+          };
+          res.writeHead(200, {
+             'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+             'Access-Control-Allow-Origin': '*'
+          });
+          fs.createReadStream(filePath).pipe(res);
+        } else {
+          res.writeHead(404);
+          res.end('Not found');
+        }
+      } catch (e) {
+        res.writeHead(500);
+        res.end('Server Error');
+      }
+    });
+
+    localServer.on('error', reject);
+    localServer.listen(0, '127.0.0.1', () => {
+      localServerPort = (localServer?.address() as any).port;
+      console.log(`[Video Compositor] Local asset server started on port ${localServerPort}`);
+      resolve();
+    });
+  });
+
+  function toLocalUrl(filePath: string): string {
+    const resolved = path.resolve(filePath);
+    if (!fs.existsSync(resolved)) {
+      console.warn(`[Video Compositor] Warning: File not found: ${resolved}`);
+      return filePath;
+    }
+    return `http://127.0.0.1:${localServerPort}/?path=${encodeURIComponent(resolved)}`;
+  }
+
   const fps = 30;
   let remotionInputProps: any = null;
   let totalFrames = 0;
-
-  let bgmToMix: string | null = null;
-  let bgmVolumeToMix = 0.20;
 
   // 1. Tentar ler do Story Manifest se disponível
   if (assetUrls && assetUrls.storyManifest && fs.existsSync(assetUrls.storyManifest)) {
@@ -75,36 +108,31 @@ export async function compositeVideo(
       const manifestRaw = fs.readFileSync(assetUrls.storyManifest, 'utf-8');
       const manifest: RenderManifest = JSON.parse(manifestRaw);
 
-      // Converter todos os caminhos locais do manifest para Base64 data URLs
       const memoriesDir = path.join(process.cwd(), 'packages/knowledge/memories');
       
-      // Extrair trilha sonora (BGM) para ser mixada via FFmpeg depois do Remotion
+      // Resolução do caminho absoluto da trilha sonora (BGM) para que o Remotion a renderize nativamente
       if (manifest.audioContext.bgmUrl) {
         const bgmPath = path.isAbsolute(manifest.audioContext.bgmUrl)
           ? manifest.audioContext.bgmUrl
           : path.join(memoriesDir, manifest.audioContext.bgmUrl);
 
         if (fs.existsSync(bgmPath)) {
-          console.log(`[Video Compositor] 🎵 Trilha sonora separada para FFmpeg mix: ${bgmPath}`);
-          bgmToMix = bgmPath;
-          bgmVolumeToMix = manifest.audioContext.bgmVolume ?? 0.20;
-          // Remover do manifest para que o Chromium/Remotion não tente carregar (evita base64 limit e CORS errors)
-          manifest.audioContext.bgmUrl = '';
+          manifest.audioContext.bgmUrl = toLocalUrl(bgmPath);
         } else {
           console.warn(`[Video Compositor] ⚠️ Trilha sonora não encontrada no disco: ${bgmPath}. Renderizando sem música de fundo.`);
           manifest.audioContext.bgmUrl = '';
         }
       }
 
-      // Converter cada cena (imagem e locução)
+      // Converter cada cena (imagem e locução) para usar protocolo http
       for (const scene of manifest.scenes) {
         if (scene.layout.mediaUrl && fs.existsSync(scene.layout.mediaUrl)) {
-          scene.layout.mediaUrl = fileToDataURL(scene.layout.mediaUrl);
+          scene.layout.mediaUrl = toLocalUrl(scene.layout.mediaUrl);
         }
         
         const narrationPath = (scene.layout as any).narrationPath;
         if (narrationPath && fs.existsSync(narrationPath)) {
-          (scene.layout as any).narrationUrl = fileToDataURL(narrationPath);
+          (scene.layout as any).narrationUrl = toLocalUrl(narrationPath);
         }
 
         const durationInFrames = Math.ceil((scene.durationMs / 1000) * fps);
@@ -129,14 +157,15 @@ export async function compositeVideo(
       let imagePath = assetUrls[`visual_sec_${idx}`] || assetUrls[`visual_scene_${idx}`];
 
       if (!audioPath || !imagePath) {
+        if (localServer) { (localServer as any).close(); }
         throw new Error(`Missing audio or image for section ${idx}`);
       }
 
       const durationSeconds = getAudioDuration(audioPath);
       const durationInFrames = Math.ceil(durationSeconds * fps);
 
-      const imageUrl = fileToDataURL(imagePath);
-      const audioUrl = fileToDataURL(audioPath);
+      const imageUrl = toLocalUrl(imagePath);
+      const audioUrl = toLocalUrl(audioPath);
 
       sections.push({
         text: section.content,
@@ -194,23 +223,16 @@ export async function compositeVideo(
 
     console.log(`[Video Compositor] Remotion render concluído com sucesso!`);
 
-    if (bgmToMix) {
-      console.log(`[Video Compositor] Misturando BGM via FFmpeg...`);
-      const tempOutput = outputVideoPath.replace('.mp4', '_temp_nobgm.mp4');
-      fs.renameSync(outputVideoPath, tempOutput);
-      
-      const mixCmd = `ffmpeg -nostdin -y -i "${tempOutput}" -stream_loop -1 -i "${bgmToMix}" -filter_complex "[1:a]volume=${bgmVolumeToMix}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0" -c:v copy -c:a aac -b:a 192k "${outputVideoPath}"`;
-      
-      await execAsync(mixCmd);
-      fs.unlinkSync(tempOutput);
-      console.log(`[Video Compositor] BGM mix concluído!`);
-    }
-
   } catch (remotionError) {
     console.warn(`[Video Compositor] Remotion rendering failed. Falling back to FFmpeg compositor:`, remotionError);
     
     // Fallback to FFmpeg compositor
     await renderWithFFmpeg(contentId, script, assetUrls, outputVideoPath);
+  } finally {
+    if (localServer) {
+       (localServer as any).close();
+       console.log(`[Video Compositor] Local asset server stopped.`);
+    }
   }
 }
 
