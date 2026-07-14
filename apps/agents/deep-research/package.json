@@ -1,0 +1,23 @@
+{
+  "name": "@cos/agent-deep-research",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@cos/cgl-writer": "workspace:*",
+    "@cos/events": "workspace:*",
+    "@cos/llm": "workspace:*",
+    "bullmq": "^5.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "*"
+  }
+}

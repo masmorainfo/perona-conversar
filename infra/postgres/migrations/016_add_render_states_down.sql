@@ -1,0 +1,32 @@
+-- ============================================================
+-- COS — Migration 016: RENDER states reversibility notes
+-- ============================================================
+-- UP: already applied by migration 015.
+-- MEDIA_SYNTHESIZED and RENDER_PENDING were added to content_state enum.
+--
+-- This file exists solely to document the DOWN path as required
+-- by the reversibility policy adopted in Sprint 6.
+--
+-- DOWN:
+-- PostgreSQL does not support ALTER TYPE DROP VALUE.
+-- Reversal requires: rename old type, create new type without the
+-- value, migrate the column, drop the old type.
+-- This is intentionally NOT automated — it must be run manually
+-- under operator supervision if rollback is ever needed.
+--
+-- Manual rollback steps (run only if the states must be removed):
+--
+--   BEGIN;
+--     ALTER TYPE content_state RENAME TO content_state_old;
+--     CREATE TYPE content_state AS ENUM (
+--       'DISCOVERED','EVALUATED','APPROVED','REJECTED','DEFERRED',
+--       'RESEARCHED','SCRIPTED','REVISED','CRITIC_OK','CRITIC_FAIL',
+--       'STORYBOARD_PLANNED','ABANDONED','PRODUCED','RENDERED',
+--       'QC_APPROVED','QC_FAIL','CINEMATIC_REVIEWING','PENDING_REVIEW',
+--       'READY_TO_PUBLISH','PUBLISHED','PUBLISHED_PARTIAL','ANALYZED','LEARNED'
+--     );
+--     ALTER TABLE content_units
+--       ALTER COLUMN state TYPE content_state
+--       USING state::text::content_state;
+--     DROP TYPE content_state_old;
+--   COMMIT;
