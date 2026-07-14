@@ -14,6 +14,7 @@
     "@cos/types": "workspace:*",
     "@cos/llm": "workspace:*",
     "@cos/knowledge": "workspace:*",
+    "@cos/notifications": "workspace:*",
     "bullmq": "^5.0.0",
     "dotenv": "^16.0.0",
     "pg": "^8.22.0"

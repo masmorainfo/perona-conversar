@@ -290,6 +290,9 @@ importers:
       '@cos/llm':
         specifier: workspace:*
         version: link:../../../packages/llm
+      '@cos/notifications':
+        specifier: workspace:*
+        version: link:../../../packages/notifications
       '@cos/types':
         specifier: workspace:*
         version: link:../../../packages/types

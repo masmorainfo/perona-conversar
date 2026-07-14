@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { OpenAIProvider } from '@cos/llm';
+import { sendTelegram } from '@cos/notifications';
 
 export interface OpportunityInput {
   orgId: string;
@@ -22,6 +23,46 @@ export class OpportunityEngine {
 
   async generateOpportunities(): Promise<void> {
     console.log(`[Opportunity Engine] Iniciando ciclo...`);
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Create limit table if not exists
+    await this.dbPool.query(`
+      CREATE TABLE IF NOT EXISTS system_daily_limits (
+        date_key DATE PRIMARY KEY,
+        executions INT NOT NULL DEFAULT 0,
+        alert_sent BOOLEAN NOT NULL DEFAULT false
+      );
+    `);
+
+    // Ensure row exists for today
+    await this.dbPool.query(`
+      INSERT INTO system_daily_limits (date_key) 
+      VALUES ($1) 
+      ON CONFLICT (date_key) DO NOTHING;
+    `, [today]);
+
+    // Check limit
+    const { rows: limitRows } = await this.dbPool.query(`
+      SELECT executions, alert_sent FROM system_daily_limits WHERE date_key = $1;
+    `, [today]);
+
+    if (limitRows[0].executions >= 15) {
+      console.log('[Opportunity Engine] 🛑 Limite diário de execuções atingido (15/15). Abortando ciclo.');
+      if (!limitRows[0].alert_sent) {
+         const botToken = process.env.TELEGRAM_BOT_TOKEN;
+         const chatId = process.env.TELEGRAM_CHAT_ID;
+         if (botToken && chatId) {
+            try {
+              await sendTelegram('🛑 *Limite diário de execuções atingido (15/15)* — pipeline pausado até amanhã', { botToken, chatId }, 'Markdown');
+              await this.dbPool.query(`UPDATE system_daily_limits SET alert_sent = true WHERE date_key = $1`, [today]);
+            } catch (err) {
+              console.error('[Opportunity Engine] Falha ao enviar alerta no Telegram:', err);
+            }
+         }
+      }
+      return;
+    }
 
     // Fetch signals from the last 24 hours
     const { rows: signals } = await this.dbPool.query(`
@@ -106,7 +147,7 @@ export class OpportunityEngine {
         if (result.hasOpportunity && baseScoreValue >= 50) {
           // Check database to prevent duplicate opportunities with similar titles
           const { rows: existingOpp } = await this.dbPool.query(
-            'SELECT id FROM content_opportunities WHERE channel_id = $1 AND LOWER(title) = LOWER($2) AND status = \'PENDING\'',
+            'SELECT id FROM content_opportunities WHERE channel_id = $1 AND LOWER(title) = LOWER($2) AND created_at > NOW() - INTERVAL \'24 hours\'',
             [channelId, result.title]
           );
 
@@ -157,6 +198,18 @@ export class OpportunityEngine {
           );
 
           console.log(`[Opportunity Engine] Nova Oportunidade Gerada: "${result.title}" (Base: ${baseScoreValue}, Dynamic: ${dynamicScore.toFixed(0)}, Sources: ${sourceCount}, Category: ${category})`);
+
+          // Increment daily limit counter
+          const { rows: updatedLimit } = await this.dbPool.query(
+            `UPDATE system_daily_limits SET executions = executions + 1 WHERE date_key = $1 RETURNING executions`,
+            [today]
+          );
+
+          if (updatedLimit[0] && updatedLimit[0].executions >= 15) {
+            console.log('[Opportunity Engine] 🛑 Limite diário atingido durante o processamento de canais. Interrompendo novos disparos.');
+            break; // Stop processing other channels for this cycle
+          }
+
         } else {
           console.log(`[Opportunity Engine] Nenhuma oportunidade qualificada identificada para canal ${core.name}`);
         }
