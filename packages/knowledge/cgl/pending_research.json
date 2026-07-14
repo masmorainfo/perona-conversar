@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "b1d57d81-1bb3-45bc-a9a8-4bae7073ab20",
+      "area": "fotografia",
+      "concept": "Golden Hour Silhouette",
+      "description": "Usar a luz dourada do golden hour para criar silhuetas dramáticas de jogadores, enfatizando a solidão e grandeza do momento. Técnica clássica do cinema europeu aplicada ao futebol.",
+      "tags": [
+        "golden-hour",
+        "silhueta",
+        "luz-natural",
+        "drama"
+      ],
+      "canon_link": "Linguagem Visual > Luz Natural",
+      "confidence": 0.92,
+      "reasoning": "A KAIRO prioriza autenticidade visual — a luz natural do golden hour cria uma estética cinematográfica premium sem depender de efeitos artificiais.",
+      "source_url": "https://example.com",
+      "research_query": "golden hour cinematography",
+      "proposed_at": "2026-07-08T16:50:46.681Z",
+      "status": "approved"
+    },
+    {
+      "id": "34ce073f-6c40-4476-9d8b-ad98075a3ea9",
+      "area": "fotografia",
+      "concept": "Contra-Luz Emocional",
+      "description": "Posicionar a câmera contra a fonte de luz (sol baixo, refletores) para criar halos luminosos ao redor dos jogadores, reforçando a aura heroica ou trágica do momento narrativo.",
+      "tags": [
+        "contra-luz",
+        "backlight",
+        "halo",
+        "heroismo"
+      ],
+      "canon_link": "Emoções > Grandeza Trágica",
+      "confidence": 0.85,
+      "reasoning": "A contra-luz é um recurso visual recorrente em documentários esportivos premiados e se alinha com a identidade de herói trágico da KAIRO.",
+      "source_url": "https://example.com",
+      "research_query": "golden hour cinematography",
+      "proposed_at": "2026-07-08T16:50:46.682Z",
+      "status": "rejected"
+    },
+    {
+      "id": "5bc7fc7b-1bf0-45fc-b025-fa178ab8529b",
+      "area": "fotografia",
+      "concept": "Warm-Cool Color Contrast",
+      "description": "Intercalar tons quentes (dourado, âmbar) e frios (azul, cinza) na mesma sequência para criar tensão visual e refletir o conflito emocional da narrativa.",
+      "tags": [
+        "temperatura-cor",
+        "contraste",
+        "warm-cool",
+        "tensao-visual"
+      ],
+      "canon_link": "Cor > Paleta Emocional",
+      "confidence": 0.78,
+      "reasoning": "O contraste warm-cool é usado extensivamente no cinema de Deakins e Lubezki, referências diretas para a estética KAIRO.",
+      "source_url": "https://example.com",
+      "research_query": "golden hour cinematography",
+      "proposed_at": "2026-07-08T16:50:46.682Z",
+      "status": "approved"
+    }
+  ]
+}

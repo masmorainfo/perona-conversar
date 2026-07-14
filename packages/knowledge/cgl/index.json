@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "areas": [
+    {
+      "file": "fotografia.json",
+      "area": "fotografia",
+      "entry_count": 2
+    },
+    {
+      "file": "storytelling.json",
+      "area": "storytelling",
+      "entry_count": 0
+    },
+    {
+      "file": "ritmo.json",
+      "area": "ritmo",
+      "entry_count": 0
+    },
+    {
+      "file": "montagem.json",
+      "area": "montagem",
+      "entry_count": 0
+    },
+    {
+      "file": "som.json",
+      "area": "som",
+      "entry_count": 0
+    },
+    {
+      "file": "cor.json",
+      "area": "cor",
+      "entry_count": 0
+    },
+    {
+      "file": "futebol.json",
+      "area": "futebol",
+      "entry_count": 0
+    },
+    {
+      "file": "emocoes.json",
+      "area": "emocoes",
+      "entry_count": 0
+    },
+    {
+      "file": "simbolismo.json",
+      "area": "simbolismo",
+      "entry_count": 0
+    },
+    {
+      "file": "cinema.json",
+      "area": "cinema",
+      "entry_count": 0
+    },
+    {
+      "file": "referencias.json",
+      "area": "referencias",
+      "entry_count": 0
+    },
+    {
+      "file": "documentarios.json",
+      "area": "documentarios",
+      "entry_count": 0
+    },
+    {
+      "file": "linguagem_visual.json",
+      "area": "linguagem_visual",
+      "entry_count": 0
+    }
+  ],
+  "total_entries": 2,
+  "last_updated": "2026-07-08T17:20:18.555Z"
+}

@@ -1,0 +1,34 @@
+{
+  "area": "fotografia",
+  "version": 1,
+  "entries": [
+    {
+      "id": "foto-001",
+      "concept": "Golden Hour Silhouette",
+      "description": "Usar a luz dourada do golden hour para criar silhuetas dramáticas de jogadores, enfatizando a solidão e grandeza do momento. Técnica clássica do cinema europeu aplicada ao futebol.",
+      "tags": [
+        "golden-hour",
+        "silhueta",
+        "luz-natural",
+        "drama"
+      ],
+      "canon_link": "Linguagem Visual > Luz Natural",
+      "source": "kdr",
+      "added_at": "2026-07-08T16:52:06.782Z"
+    },
+    {
+      "id": "foto-002",
+      "concept": "Warm-Cool Color Contrast",
+      "description": "Intercalar tons quentes (dourado, âmbar) e frios (azul, cinza) na mesma sequência para criar tensão visual e refletir o conflito emocional da narrativa.",
+      "tags": [
+        "temperatura-cor",
+        "contraste",
+        "warm-cool",
+        "tensao-visual"
+      ],
+      "canon_link": "Cor > Paleta Emocional",
+      "source": "kdr",
+      "added_at": "2026-07-08T17:20:18.553Z"
+    }
+  ]
+}
