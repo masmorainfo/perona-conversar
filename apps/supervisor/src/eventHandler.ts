@@ -308,7 +308,7 @@ async function handleCycleStarted(pool: any, data: any): Promise<void> {
     const { Queue } = await import('bullmq');
     const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
     const redisUrl = new URL(REDIS_URL);
-    const pipelineQueue = new Queue('pipeline', {
+    const pipelineQueue = new Queue('supervisor', {
       connection: { host: redisUrl.hostname, port: parseInt(redisUrl.port || '6379', 10), password: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined },
     });
 

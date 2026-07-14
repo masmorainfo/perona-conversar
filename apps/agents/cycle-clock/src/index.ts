@@ -162,9 +162,9 @@ async function runCycle(reason: 'scheduled' | 'startup'): Promise<CycleResult> {
       if (telegramConfig.botToken && telegramConfig.chatId) {
         const timeNow = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: TIMEZONE });
         const skipMessage = `⏭️ Horário das ${timeNow} pulado — vídeo anterior do canal *${channel.slug}* ainda em processamento (estado: \`${activeUnits[0]?.state}\`).`;
-        await sendTelegram(skipMessage, telegramConfig, 'Markdown').catch((err: unknown) => {
-          console.warn('[Cycle Clock] Falha ao notificar Telegram sobre o skip:', err);
-        });
+        /* await sendTelegram(skipMessage, telegramConfig, 'Markdown').catch((err: unknown) => {
+          console.warn('[Cycle Clock] Falha ao notify Telegram sobre o skip:', err);
+        }); */
       }
 
       continue;

@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import path from 'path';
 
 export interface RawSignalInput {
   sensorName: string;
@@ -8,12 +9,12 @@ export interface RawSignalInput {
 
 export async function fetchTrends24Signals(): Promise<RawSignalInput[]> {
   try {
-    const pythonScript = 'C:/AI/perona - conversar/scrapers/trends24/t3_scraper.py';
-    const pythonCwd = 'C:/AI/perona - conversar/scrapers/trends24';
+    const pythonCwd = path.join(process.cwd(), 'scrapers', 'trends24');
+    const pythonScript = path.join(pythonCwd, 't3_scraper.py');
     
-    console.log(`[World Observer] Executing Python scraper: python ${pythonScript}`);
-    // Run the python script
-    const stdout = execSync('python t3_scraper.py', { cwd: pythonCwd, encoding: 'utf8', timeout: 15000 });
+    console.log(`[World Observer] Executing Python scraper: python3 ${pythonScript}`);
+    // Run the python script using python3
+    const stdout = execSync(`python3 t3_scraper.py`, { cwd: pythonCwd, encoding: 'utf8', timeout: 15000 });
     
     // Find the JSON block
     const startIdx = stdout.indexOf('JSON_START');

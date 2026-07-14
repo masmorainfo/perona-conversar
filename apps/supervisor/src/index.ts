@@ -979,6 +979,24 @@ async function bootstrap() {
        SET strategy = strategy || '{"autoPublish": false, "platformWeights": {"tiktok": 1}}'::jsonb`
     );
     console.log('[Supervisor] Enforced autoPublish = false and platformWeights = {"tiktok": 1} for all channels');
+
+    // Recuperar itens presos em DISCOVERED (criados incorretamente na fila 'pipeline')
+    const { rows: stuckUnits } = await getPool().query(`
+      SELECT id, channel_id, topic FROM content_units WHERE state = 'DISCOVERED'
+    `);
+    if (stuckUnits.length > 0) {
+      console.log(`[Supervisor] Recuperando ${stuckUnits.length} itens presos em DISCOVERED...`);
+      const pipelineQueue = new Queue(SUPERVISOR_QUEUE, { connection });
+      for (const unit of stuckUnits) {
+        await pipelineQueue.add('EVALUATE_TRIGGER', {
+          contentId: unit.id,
+          channelId: unit.channel_id,
+          topic: unit.topic
+        });
+        console.log(`[Supervisor] Reenfileirado: ${unit.topic} (${unit.id})`);
+      }
+      await pipelineQueue.close();
+    }
   } catch (error) {
     console.error('❌ Falha ao conectar ao banco de dados:', error);
     process.exit(1);
@@ -1026,7 +1044,7 @@ async function bootstrap() {
   // Heartbeat horário
   setInterval(() => { sendHeartbeat().catch(() => {}); }, 60 * 60 * 1_000);
   // Heartbeat imediato ao iniciar (confirma que o sistema está online)
-  setTimeout(() => { sendHeartbeat().catch(() => {}); }, 3_000);
+  // setTimeout(() => { sendHeartbeat().catch(() => {}); }, 3_000);
 
   // Graceful shutdown
   const shutdown = async () => {
