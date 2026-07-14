@@ -145,14 +145,28 @@ export class OpportunityEngine {
         const baseScoreValue = result.baseScore ?? (result.score ? result.score * 100 : 0);
 
         if (result.hasOpportunity && baseScoreValue >= 50) {
-          // Check database to prevent duplicate opportunities with similar titles
-          const { rows: existingOpp } = await this.dbPool.query(
-            'SELECT id FROM content_opportunities WHERE channel_id = $1 AND LOWER(title) = LOWER($2) AND created_at > NOW() - INTERVAL \'24 hours\'',
-            [channelId, result.title]
+          // Fetch opportunities created in the last 24h to check for semantic duplicates
+          const { rows: recentOpps } = await this.dbPool.query(
+            'SELECT title FROM content_opportunities WHERE channel_id = $1 AND created_at > NOW() - INTERVAL \'24 hours\'',
+            [channelId]
           );
 
-          if (existingOpp.length > 0) {
-            console.log(`[Opportunity Engine] Oportunidade com título similar já pendente para "${result.title}". Ignorando...`);
+          let isDuplicate = false;
+          for (const opp of recentOpps) {
+            const similarity = calculateJaccard(result.title, opp.title);
+            
+            if (similarity >= 0.2 && similarity < 0.4) {
+              console.log(`[VLS/Calibração] Similaridade Jaccard (${similarity.toFixed(2)}) entre "${result.title}" (nova) e "${opp.title}" (existente).`);
+            }
+            
+            if (similarity >= 0.3) {
+              console.log(`[Opportunity Engine] Oportunidade com tema similar (similaridade: ${similarity.toFixed(2)}) já existe nas últimas 24h: "${opp.title}". Ignorando gerada: "${result.title}"...`);
+              isDuplicate = true;
+              break;
+            }
+          }
+
+          if (isDuplicate) {
             continue;
           }
 
