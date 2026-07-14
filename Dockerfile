@@ -36,6 +36,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 # Copy package package.jsons
 COPY packages/events/package.json ./packages/events/
 COPY packages/knowledge/package.json ./packages/knowledge/
+COPY packages/knowledge/cgl-writer/package.json ./packages/knowledge/cgl-writer/
 COPY packages/llm/package.json ./packages/llm/
 COPY packages/notifications/package.json ./packages/notifications/
 COPY packages/state-machine/package.json ./packages/state-machine/
@@ -61,6 +62,7 @@ COPY apps/agents/learning/package.json ./apps/agents/learning/
 COPY apps/agents/cinematic-review/package.json ./apps/agents/cinematic-review/
 COPY apps/agents/analytics/package.json ./apps/agents/analytics/
 COPY apps/agents/critic/package.json ./apps/agents/critic/
+COPY apps/agents/deep-research/package.json ./apps/agents/deep-research/
 
 # Install dependencies (frozen lockfile to match developer environment)
 RUN pnpm install --frozen-lockfile
