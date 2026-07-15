@@ -1,20 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --cos-background: #0b0b10;
-  --cos-surface-1: #11111b;
-  --cos-surface-2: #181825;
-  --cos-border: #1e1e2e;
-  --cos-accent: #cba6f7;
+  --cos-background: #0A0A0A;
+  --cos-surface-1: #111111;
+  --cos-surface-2: #1A1A1A;
+  --cos-border: #2A2A2A;
+  --cos-accent: #D4AF37; /* Cinematic Gold */
   
   --cos-success: #a6e3a1;
-  --cos-warning: #f9e2af;
-  --cos-danger: #f38ba8;
+  --cos-warning: #D4AF37;
+  --cos-danger: #DC143C; /* Crimson Red */
   --cos-info: #89b4fa;
   
-  --cos-foreground: #fafafa;
-  --cos-muted: #1e1e2e;
-  --cos-muted-foreground: #a1a1aa;
+  --cos-foreground: #FAFAFA;
+  --cos-muted: #2A2A2A;
+  --cos-muted-foreground: #A1A1AA;
 }
 
 @theme {
@@ -52,7 +52,13 @@
 body {
   background-color: var(--cos-background);
   color: var(--cos-foreground);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family: var(--font-roboto), sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6, .font-mono {
+  font-family: var(--font-oswald), sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 /* Custom Scrollbar for Workspace feeling */

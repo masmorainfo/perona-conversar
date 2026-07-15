@@ -51,7 +51,7 @@ export async function GET() {
     } else {
       summaryParts.push(`O pipeline processou ${total} unidades de conteúdo no total.`);
       if (published > 0) summaryParts.push(`${published} vídeo${published > 1 ? 's' : ''} publicado${published > 1 ? 's' : ''} com sucesso.`);
-      if (abandoned > 0) summaryParts.push(`${abandoned} arquivado${abandoned > 1 ? 's' : ''} por excesso de reprovações.`);
+      if (abandoned > 0) summaryParts.push(`${abandoned} Arquivado${abandoned > 1 ? 's' : ''} (revisão encerrada).`);
     }
 
     const highlights = [
@@ -112,7 +112,7 @@ export async function GET() {
         id: 'pred-abandon',
         title: `Taxa de abandono elevada: ${Math.round((abandoned / total) * 100)}%`,
         probability: 'Alta',
-        description: `${abandoned} unidades foram arquivadas após múltiplas reprovações. Revise os critérios do Critic Agent ou o perfil de persona do canal.`,
+        description: `${abandoned} unidades foram arquivadas (revisão encerrada). Verifique se foi encerramento manual ou limite de reprovações.`,
         mitigation: 'Acesse o Channels Editor e revise os thresholds de criticApprovalMinScore.',
       });
     }
@@ -129,11 +129,55 @@ export async function GET() {
         mitigation: 'Use o Command Center para injetar novos tópicos ou ative o modo autônomo.',
       });
     }
+    // --- Cost Metrics ---
+    const { rows: todayCostRow } = await query(`
+      SELECT SUM(cost_incurred_usd) as total
+      FROM system_daily_limits
+      WHERE date = CURRENT_DATE
+    `).catch(() => ({ rows: [] }));
+    
+    const { rows: avg7dRow } = await query(`
+      SELECT AVG(daily_total) as avg_7d
+      FROM (
+        SELECT date, SUM(cost_incurred_usd) as daily_total
+        FROM system_daily_limits
+        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY date
+      ) sub
+    `).catch(() => ({ rows: [] }));
+
+    const todayCost = todayCostRow[0]?.total ? parseFloat(todayCostRow[0].total) : 0.00;
+    const avg7dCost = avg7dRow[0]?.avg_7d ? parseFloat(avg7dRow[0].avg_7d) : 0.00;
+    const costMetrics = {
+      todayUsd: todayCost.toFixed(2),
+      avg7dUsd: avg7dCost.toFixed(2),
+      trend: todayCost > avg7dCost ? 'up' : 'down'
+    };
+
+    // --- Pending Decisions ---
+    const { rows: pendingRows } = await query(`
+      SELECT id, topic, payload, created_at
+      FROM content_units
+      WHERE state = 'PENDING_REVIEW'
+      ORDER BY created_at DESC
+      LIMIT 5
+    `).catch(() => ({ rows: [] }));
+
+    const pendingDecisions = pendingRows.map((r: any) => ({
+      id: r.id,
+      topic: r.topic,
+      createdAt: r.created_at,
+      thumbnail: r.payload?.generatedAssets?.thumbnail || null,
+      score: r.payload?.evaluation?.finalScore || null,
+      summary: r.payload?.script?.summary || 'Resumo não disponível',
+    }));
 
     return NextResponse.json({
       dailyBriefing,
       agentConversations,
       predictions,
+      costMetrics,
+      pendingDecisions,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

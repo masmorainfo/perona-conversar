@@ -13,9 +13,11 @@ import { ContentSandbox } from '@/components/ContentSandbox';
 import { DailyBriefing } from '@/components/DailyBriefing';
 import { AgentConversations } from '@/components/AgentConversations';
 import { ReviewQueue } from '@/components/ReviewQueue';
+import { OverviewDashboard } from '@/components/OverviewDashboard';
+import { DirectorView } from '@/components/DirectorView';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState('command');
+  const [activeTab, setActiveTab] = useState('overview');
   const [statusData, setStatusData] = useState<any>({
     channels: [],
     contentUnits: [],
@@ -50,7 +52,18 @@ export default function Home() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main Workspace content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pb-24 md:pb-8">
+        {activeTab === 'overview' && (
+          <OverviewDashboard
+            channels={statusData.channels}
+            contentUnits={statusData.contentUnits}
+          />
+        )}
+        
+        {activeTab === 'director' && (
+          <DirectorView />
+        )}
+
         {activeTab === 'command' && (
           <CommandCenter
             channels={statusData.channels}
