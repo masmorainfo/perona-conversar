@@ -5,10 +5,10 @@ export function StrategyRoom() {
   const opportunities = [
     {
       id: 'o1',
-      title: 'Alta demanda por tutoriais de Rust concorrente',
+      title: 'Alta demanda por retrospectivas táticas de clássicos',
       confidence: 0.94,
       trendSource: 'Análise de engajamento externa via API',
-      action: 'Recomendado injetar temas como "Rust Channels e Select na prática".'
+      action: 'Recomendado focar em documentários sobre finais icônicas da Champions League.'
     },
     {
       id: 'o2',

@@ -16,7 +16,7 @@ export async function GET() {
       stateCounts.map((r: any) => [r.state, parseInt(r.count)])
     );
 
-    const published = counts['PUBLISHED'] ?? 0;
+    const published = (counts['PUBLISHED'] ?? 0) + (counts['LEARNED'] ?? 0);
     const abandoned = counts['ABANDONED'] ?? 0;
     const rejected = counts['REJECTED'] ?? 0;
     const total = Object.values(counts).reduce((a: number, b) => a + (b as number), 0);
