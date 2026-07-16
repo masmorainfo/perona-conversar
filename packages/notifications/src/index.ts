@@ -11,15 +11,33 @@
  *   });
  *
  *   // Em qualquer lugar:
- *   await notify('PENDING_REVIEW', { contentId, topic, channelSlug });
+ *   await notify('PENDING_REVIEW', { contentId, topic, channelSlug, videoFile, hook, cta });
  */
 
-import { sendTelegram, type TelegramConfig, type TelegramInlineKeyboardMarkup, type SendResult } from './telegram.js';
+import {
+  sendTelegram,
+  sendVideoWithCaption,
+  type TelegramConfig,
+  type TelegramInlineKeyboardMarkup,
+  type SendResult,
+} from './telegram.js';
 import { formatEvent, type NotificationEventType, type EventPayload } from './events.js';
 
 export type { NotificationEventType, EventPayload } from './events.js';
-export { sendTelegram, getUpdates, editTelegramMessage, answerCallbackQuery } from './telegram.js';
-export type { TelegramUpdate, TelegramInlineKeyboardButton, TelegramInlineKeyboardMarkup, SendResult } from './telegram.js';
+export {
+  sendTelegram,
+  sendVideoWithCaption,
+  getUpdates,
+  editTelegramMessage,
+  editTelegramCaption,
+  answerCallbackQuery,
+} from './telegram.js';
+export type {
+  TelegramUpdate,
+  TelegramInlineKeyboardButton,
+  TelegramInlineKeyboardMarkup,
+  SendResult,
+} from './telegram.js';
 
 let _config: TelegramConfig | null = null;
 
@@ -39,7 +57,9 @@ export function initNotifications(config: TelegramConfig): void {
 /**
  * Envia uma notificação para o operador.
  *
- * Se o Telegram estiver indisponível, apenas loga o erro.
+ * Para PENDING_REVIEW com videoFile disponível, envia o vídeo nativo (sendVideoWithCaption).
+ * Para outros eventos ou sem vídeo, envia texto simples.
+ * Retorna { ok: false } silenciosamente se Telegram indisponível.
  */
 export async function notify(
   type: NotificationEventType,
@@ -59,37 +79,48 @@ export async function notify(
   let replyMarkup: TelegramInlineKeyboardMarkup | undefined = undefined;
 
   if (type === 'PENDING_REVIEW' && payload.contentId) {
-    let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL'] 
+    let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL']
       || (process.env['RAILWAY_PUBLIC_DOMAIN'] ? `https://${process.env['RAILWAY_PUBLIC_DOMAIN']}` : undefined)
       || process.env['PUBLIC_URL']
       || 'http://127.0.0.1:3000';
     if (MISSION_CONTROL_URL.includes('localhost')) {
       MISSION_CONTROL_URL = MISSION_CONTROL_URL.replace('localhost', '127.0.0.1');
     }
-    
-    const previewUrl = payload.videoFilename
-      ? `${MISSION_CONTROL_URL}/api/media/${payload.videoFilename}`
-      : `${MISSION_CONTROL_URL}/review`;
 
+    // Hierarquia de botões KAIRO:
+    // Linha 1: APROVAR (ação primária — full width)
+    // Linha 2: Editar | Detalhes | Rejeitar (ações secundárias)
     replyMarkup = {
       inline_keyboard: [
         [
-          { text: '▶️ Assistir', url: previewUrl },
-          { text: '📚 Ver Fontes', callback_data: `sources_story:${payload.contentId}` }
+          { text: '✅  APROVAR', callback_data: `approve:${payload.contentId}` },
         ],
         [
-          { text: '🟢 Publicar', callback_data: `approve:${payload.contentId}` },
-          { text: '🔴 Rejeitar', callback_data: `reject:${payload.contentId}` }
+          { text: '✏️ Editar', callback_data: `adjust:${payload.contentId}` },
+          { text: 'ℹ️ Detalhes', callback_data: `details:${payload.contentId}` },
+          { text: '❌ Rejeitar', callback_data: `reject:${payload.contentId}` },
         ],
-        [
-          { text: '🧪 Trocar Hipótese VLS', callback_data: `swap_hypothesis:${payload.contentId}` },
-          { text: '🔍 Por que esta História?', callback_data: `why_story:${payload.contentId}` }
-        ],
-        [
-          { text: '⏭️ Pular esta História', callback_data: `skip_story:${payload.contentId}` }
-        ]
-      ]
+      ],
     };
+
+    // Tenta enviar como vídeo nativo se o arquivo existir
+    if (payload.videoFile) {
+      const videoResult = await sendVideoWithCaption(
+        payload.videoFile,
+        message,
+        _config,
+        replyMarkup,
+      ).catch((err) => {
+        console.warn('[Notifications] sendVideoWithCaption falhou, caindo para texto:', err);
+        return { ok: false, error: String(err) } as SendResult;
+      });
+
+      if (videoResult.ok) {
+        return videoResult;
+      }
+      // Se falhou (vídeo não existe, timeout, etc.), cai para sendMessage abaixo
+      console.warn('[Notifications] Fallback para mensagem de texto (vídeo indisponível).');
+    }
   }
 
   return await sendTelegram(message, _config, 'Markdown', replyMarkup).catch((err) => {

@@ -9,6 +9,10 @@
  *   TELEGRAM_CHAT_ID    — ID do chat do operador
  */
 
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+
 const TELEGRAM_API = 'https://api.telegram.org';
 
 export interface TelegramConfig {
@@ -34,7 +38,7 @@ export interface TelegramInlineKeyboardMarkup {
 
 /**
  * Envia uma mensagem de texto ao operador via Telegram.
- * Suporta Markdown V2 para formatação e Inline Keyboard.
+ * Suporta Markdown para formatação e Inline Keyboard.
  * Retorna { ok: false } em caso de falha — nunca lança exceção.
  */
 export async function sendTelegram(
@@ -57,7 +61,7 @@ export async function sendTelegram(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
-      signal: AbortSignal.timeout(10_000), // 10s timeout
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
@@ -76,7 +80,122 @@ export async function sendTelegram(
 }
 
 /**
- * Edita o texto de uma mensagem enviada anteriormente.
+ * Envia um vídeo nativo ao Telegram com caption formatada e botões inline.
+ * Gera um thumbnail tipo "cartaz" via FFmpeg (frame 1s, 9:16).
+ * Caption usa Markdown para formatação — limit: 1024 chars.
+ * Retorna { ok: false, error: 'video_not_found' } se arquivo não existe (caller deve fallback para sendTelegram).
+ */
+export async function sendVideoWithCaption(
+  videoPath: string,
+  caption: string,
+  config: TelegramConfig,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
+): Promise<SendResult> {
+  try {
+    if (!fs.existsSync(videoPath)) {
+      console.warn(`[Notifications] Vídeo não encontrado: ${videoPath}. Fallback para sendMessage.`);
+      return { ok: false, error: 'video_not_found' };
+    }
+
+    const url = `${TELEGRAM_API}/bot${config.botToken}/sendVideo`;
+
+    // Monta FormData multipart — usa globals nativos do Node 18+
+    // (FormData e Blob são globals no Node 18+, sem necessidade de importar undici)
+    const form = new globalThis.FormData();
+    form.append('chat_id', config.chatId);
+    form.append('caption', caption.slice(0, 1024)); // Telegram caption limit
+    form.append('parse_mode', 'Markdown');
+    form.append('supports_streaming', 'true');
+
+    if (replyMarkup) {
+      form.append('reply_markup', JSON.stringify(replyMarkup));
+    }
+
+    // Anexa o arquivo de vídeo
+    const videoBuffer = fs.readFileSync(videoPath);
+    const videoBlob = new globalThis.Blob([videoBuffer], { type: 'video/mp4' });
+    form.append('video', videoBlob, path.basename(videoPath));
+
+
+    // Gera thumbnail tipo cartaz:
+    // 1) Extrai frame em 1s, escala para 9:16 vertical (320x568)
+    // 2) Overlay com gradiente escuro na base (legibilidade do título)
+    // 3) Queima o título com drawtext (Bebas Neue ou fallback sans-serif bold)
+    const thumbPath = videoPath.replace(/\.mp4$/, '_tg_thumb.jpg');
+    const titleForThumb = (caption.split('\n').find(l => l.startsWith('"')) || '')
+      .replace(/^"|"$/g, '')          // remove aspas
+      .replace(/'/g, "\u2019")        // apóstrofo typográfico (evita problema de escape no shell)
+      .slice(0, 40);                  // trunca para não estourar o frame
+
+    try {
+      // Tenta com fonte Bebas Neue (instalada) ou fallback para DejaVu Bold
+      const fontFilter = titleForThumb
+        ? `:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${titleForThumb}':fontcolor=white:fontsize=22:x=(w-text_w)/2:y=h-80:shadowcolor=black:shadowx=1:shadowy=1`
+        : '';
+      const gradientFilter = `drawbox=x=0:y=h*0.55:w=iw:h=h*0.45:color=black@0.6:t=fill`;
+      const textFilter = titleForThumb
+        ? `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${titleForThumb}':fontcolor=white:fontsize=20:x=(w-text_w)/2:y=h-60:shadowcolor=black@0.8:shadowx=2:shadowy=2`
+        : '';
+      const vf = [
+        'scale=320:568:force_original_aspect_ratio=decrease',
+        'pad=320:568:(ow-iw)/2:(oh-ih)/2:black',
+        gradientFilter,
+        ...(textFilter ? [textFilter] : []),
+      ].join(',');
+
+      execSync(
+        `ffmpeg -nostdin -y -ss 1 -i "${videoPath}" -vframes 1 -vf "${vf}" "${thumbPath}"`,
+        { timeout: 15_000, stdio: 'pipe' }
+      );
+    } catch {
+      // Fallback: tenta sem drawtext (só frame + scale)
+      try {
+        execSync(
+          `ffmpeg -nostdin -y -ss 1 -i "${videoPath}" -vframes 1 ` +
+          `-vf "scale=320:568:force_original_aspect_ratio=decrease,pad=320:568:(ow-iw)/2:(oh-ih)/2:black" ` +
+          `"${thumbPath}"`,
+          { timeout: 10_000, stdio: 'pipe' }
+        );
+      } catch {
+        console.warn('[Notifications] Falha ao gerar thumbnail — enviando sem capa.');
+      }
+    }
+
+    if (fs.existsSync(thumbPath)) {
+      const thumbBuffer = fs.readFileSync(thumbPath);
+      const thumbBlob = new globalThis.Blob([thumbBuffer], { type: 'image/jpeg' });
+      form.append('thumbnail', thumbBlob, path.basename(thumbPath));
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: form as any, // globalThis.FormData vs undici-types compat
+      signal: AbortSignal.timeout(120_000), // 2min para upload do arquivo
+    });
+
+    // Limpeza do thumbnail temporário
+    if (fs.existsSync(thumbPath)) {
+      try { fs.unlinkSync(thumbPath); } catch {}
+    }
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`[Notifications] Telegram sendVideo error ${response.status}: ${err}`);
+      return { ok: false, error: err };
+    }
+
+    const data = (await response.json()) as any;
+    return { ok: true, messageId: data.result?.message_id };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Notifications] Falha ao enviar vídeo para Telegram: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Edita o texto de uma mensagem de texto enviada anteriormente.
+ * Para mensagens de vídeo, use editTelegramCaption em vez desta.
  */
 export async function editTelegramMessage(
   messageId: number,
@@ -113,6 +232,48 @@ export async function editTelegramMessage(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Notifications] Falha ao editar mensagem Telegram: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Edita a caption de uma mensagem de vídeo/foto enviada anteriormente.
+ * Usar sempre que a mensagem original foi enviada via sendVideoWithCaption.
+ */
+export async function editTelegramCaption(
+  messageId: number,
+  newCaption: string,
+  config: TelegramConfig,
+  parseMode: 'Markdown' | 'HTML' | 'MarkdownV2' | undefined = 'Markdown',
+  replyMarkup?: TelegramInlineKeyboardMarkup,
+): Promise<SendResult> {
+  try {
+    const url = `${TELEGRAM_API}/bot${config.botToken}/editMessageCaption`;
+    const body = JSON.stringify({
+      chat_id: config.chatId,
+      message_id: messageId,
+      caption: newCaption.slice(0, 1024),
+      parse_mode: parseMode,
+      reply_markup: replyMarkup || { inline_keyboard: [] },
+    });
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`[Notifications] Telegram editMessageCaption error ${response.status}: ${err}`);
+      return { ok: false, error: err };
+    }
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Notifications] Falha ao editar caption Telegram: ${msg}`);
     return { ok: false, error: msg };
   }
 }
@@ -206,4 +367,3 @@ export interface TelegramUpdate {
     data: string;
   };
 }
-

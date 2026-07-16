@@ -3,7 +3,7 @@ import { approveEntry, rejectEntry } from '@cos/cgl-writer';
 import { SUPERVISOR_QUEUE, OPPORTUNITY_TRIGGER_QUEUE, queueName } from '@cos/events';
 import { handleSupervisorEvent, processEvent } from './eventHandler.js';
 import { initDb, closeDb, getPool } from './db.js';
-import { initNotifications, notify, isNotificationsEnabled, getUpdates, editTelegramMessage, answerCallbackQuery } from '@cos/notifications';
+import { initNotifications, notify, isNotificationsEnabled, getUpdates, editTelegramMessage, editTelegramCaption, answerCallbackQuery } from '@cos/notifications';
 import type { TelegramUpdate } from '@cos/notifications';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -266,105 +266,182 @@ async function pollTelegram(): Promise<void> {
           const contentUnit = res.rows[0];
           
           if (!contentUnit) {
-            await answerCallbackQuery(cbQuery.id, telegramConfig, '❌ Conteúdo não encontrado.', true);
+            await answerCallbackQuery(cbQuery.id, telegramConfig, '\u274c Conteúdo não encontrado.', true);
             continue;
           }
 
           const channelId = contentUnit.channel_id;
           const topic = contentUnit.topic;
           const metadata = contentUnit.metadata || {};
-          
+          const isVideo = !!metadata.telegramIsVideo;
+
+          // Função auxiliar local: edita a mensagem certa dependendo do tipo
+          const editMsg = async (text: string, markup?: any) => {
+            if (!messageId) return;
+            if (isVideo) {
+              await editTelegramCaption(messageId, text, telegramConfig, 'Markdown', markup);
+            } else {
+              await editTelegramMessage(messageId, text, telegramConfig, 'Markdown', markup);
+            }
+          };
+
+          const chanRes = await pool.query('SELECT slug FROM channel_registry WHERE id = $1', [channelId]);
+          const channelSlug = chanRes.rows[0]?.slug ?? 'geral';
+
+          const script = (metadata.script || {}) as any;
+          const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
+          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : null;
+          const hook = script.hook || script.cta || '';
+          const hookLine = hook ? `_${escapeMarkdown(hook.slice(0, 120))}_` : null;
+
           // Transita o estado oficialmente chamando o eventHandler
           if (action === 'approve') {
             await processEvent(pool, 'REVIEW_RESULT', { contentId, channelId, action: 'approve' });
-            await answerCallbackQuery(cbQuery.id, telegramConfig, '✅ Vídeo aprovado!');
+            await answerCallbackQuery(cbQuery.id, telegramConfig, '\u2705 Vídeo aprovado para publicação!');
+
+            const updatedText = [
+              `*KAIRO // APROVADO*`,
+              ``,
+              `"${escapeMarkdown(topic)}"`,
+              hookLine,
+              ``,
+              durationText ? `\u23f1 ${durationText} \u00b7 \ud83d\udcfa ${channelSlug}` : `\ud83d\udcfa ${channelSlug}`,
+              ``,
+              `\ud83d\udfe2 Aprovado \u2014 aguardando publica\u00e7\u00e3o`,
+            ].filter((x): x is string => x !== null).join('\n');
+
+            await editMsg(updatedText);
+
           } else if (action === 'adjust') {
             await processEvent(pool, 'REVIEW_RESULT', { contentId, channelId, action: 'regenerate' });
-            await answerCallbackQuery(cbQuery.id, telegramConfig, '🟡 Solicitado ajustes!');
-          } else if (action === 'reject') {
-            const chanRes = await pool.query('SELECT slug FROM channel_registry WHERE id = $1', [channelId]);
-            const channelSlug = chanRes.rows[0]?.slug ?? 'geral';
+            await answerCallbackQuery(cbQuery.id, telegramConfig, '\ud83d\udfe1 Ajustes solicitados!');
 
-            const score = (metadata.editorialScore || metadata.score) as number | undefined;
-            const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
-            
-            const scoreText = score !== undefined ? `${(score * 100).toFixed(0)}%` : 'N/A';
-            const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : 'N/A';
+            const updatedText = [
+              `*KAIRO // EM REVIS\u00c3O*`,
+              ``,
+              `"${escapeMarkdown(topic)}"`,
+              hookLine,
+              ``,
+              durationText ? `\u23f1 ${durationText} \u00b7 \ud83d\udcfa ${channelSlug}` : `\ud83d\udcfa ${channelSlug}`,
+              ``,
+              `\ud83d\udfe1 Ajustes solicitados \u2014 retornando ao pipeline`,
+            ].filter((x): x is string => x !== null).join('\n');
+
+            await editMsg(updatedText);
+
+          } else if (action === 'reject') {
+            // Mostra o submenu de motivos de descarte editando a mesma mensagem
             const escTopic = escapeMarkdown(topic);
-            
-            const script = (metadata.script || {}) as any;
-            const summary = script.description || metadata.researchPackage?.summary || script.hook || '';
-            const summaryPart = summary ? `📝 *Resumo:* _${escapeMarkdown(summary)}_` : null;
 
             const detailText = [
-              `📺 *Canal:* \`${channelSlug}\``,
-              `📌 *Título:* *${escTopic}*`,
-              summaryPart,
-              `⏱️ *Duração:* \`${durationText}\``,
-              `💬 *Status:* 🔴 Selecione o motivo do descarte:`,
-            ].filter((x): x is string | null => x !== null).join('\n');
+              `*KAIRO // DESCARTAR?*`,
+              ``,
+              `"${escTopic}"`,
+              hookLine,
+              ``,
+              durationText ? `\u23f1 ${durationText} \u00b7 \ud83d\udcfa ${channelSlug}` : `\ud83d\udcfa ${channelSlug}`,
+              ``,
+              `\ud83d\udd34 Selecione o motivo do descarte:`,
+            ].filter((x): x is string => x !== null).join('\n');
 
-            const replyMarkup = {
+            const rejectMarkup = {
               inline_keyboard: [
                 [
-                  { text: '🚫 Não representa a marca', callback_data: `reject_reason:${contentId}:not_brand` },
-                  { text: '🗣️ Narração artificial', callback_data: `reject_reason:${contentId}:narration` }
+                  { text: '\ud83d\udeab N\u00e3o representa a marca', callback_data: `reject_reason:${contentId}:not_brand` },
+                  { text: '\ud83d\udde3\ufe0f Narra\u00e7\u00e3o artificial', callback_data: `reject_reason:${contentId}:narration` }
                 ],
                 [
-                  { text: '🎬 Direção cinematográfica', callback_data: `reject_reason:${contentId}:direction` },
-                  { text: '🖼️ Imagens inadequadas', callback_data: `reject_reason:${contentId}:images` }
+                  { text: '\ud83c\udfac Dire\u00e7\u00e3o cinematogr\u00e1fica', callback_data: `reject_reason:${contentId}:direction` },
+                  { text: '\ud83d\uddbc\ufe0f Imagens inadequadas', callback_data: `reject_reason:${contentId}:images` }
                 ],
                 [
-                  { text: '📝 Legendas ruins', callback_data: `reject_reason:${contentId}:subtitles` },
-                  { text: '💡 Boa ideia, má execução', callback_data: `reject_reason:${contentId}:bad_execution` }
+                  { text: '\ud83d\udcdd Legendas ruins', callback_data: `reject_reason:${contentId}:subtitles` },
+                  { text: '\ud83d\udca1 Boa ideia, m\u00e1 execu\u00e7\u00e3o', callback_data: `reject_reason:${contentId}:bad_execution` }
                 ],
                 [
-                  { text: '⬅️ Cancelar', callback_data: `show:${contentId}` }
+                  { text: '\u2b05\ufe0f Cancelar', callback_data: `show:${contentId}` }
                 ]
               ]
             };
 
-            if (messageId) {
-              await editTelegramMessage(messageId, detailText, telegramConfig, 'Markdown', replyMarkup);
-            }
-            await answerCallbackQuery(cbQuery.id, telegramConfig, 'Selecione o motivo da rejeição');
+            await editMsg(detailText, rejectMarkup);
+            await answerCallbackQuery(cbQuery.id, telegramConfig, 'Selecione o motivo da rejei\u00e7\u00e3o');
             continue;
           }
+        } catch (err) {
+          console.error(`[Supervisor] Erro ao processar callback query ${action}:`, err);
+          await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao processar ação.', true);
+        }
+      } else if (data.startsWith('details:')) {
+        // Mostra detalhes (score editorial + status por plataforma) sem remover o vídeo
+        const contentId = data.slice(8);
+        const pool = getPool();
+
+        try {
+          const res = await pool.query('SELECT channel_id, topic, metadata FROM content_units WHERE id = $1', [contentId]);
+          const contentUnit = res.rows[0];
+          if (!contentUnit) {
+            await answerCallbackQuery(cbQuery.id, telegramConfig, '\u274c Conteúdo não encontrado.', true);
+            continue;
+          }
+
+          const channelId = contentUnit.channel_id;
+          const topic = contentUnit.topic;
+          const metadata = contentUnit.metadata || {};
+          const isVideo = !!metadata.telegramIsVideo;
 
           const chanRes = await pool.query('SELECT slug FROM channel_registry WHERE id = $1', [channelId]);
           const channelSlug = chanRes.rows[0]?.slug ?? 'geral';
 
           const score = (metadata.editorialScore || metadata.score) as number | undefined;
-          const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
-          
           const scoreText = score !== undefined ? `${(score * 100).toFixed(0)}%` : 'N/A';
-          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : 'N/A';
-          const escTopic = escapeMarkdown(topic);
-          
+          const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
+          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : null;
+
           const script = (metadata.script || {}) as any;
-          const summary = script.description || metadata.researchPackage?.summary || script.hook || '';
-          const summaryPart = summary ? `📝 *Resumo:* _${escapeMarkdown(summary)}_` : null;
+          const hook = script.hook || script.cta || '';
+          const hookLine = hook ? `_${escapeMarkdown(hook.slice(0, 120))}_` : null;
 
-          let statusText = '';
-          if (action === 'approve') statusText = '🟢 Aprovado para Publicação';
-          else if (action === 'adjust') statusText = '🟡 Ajustes Solicitados';
+          // Publica\u00e7\u00e3o por plataforma
+          const pubResults = (metadata.publicationResults ?? []) as Array<{ platform: string; platformUrl?: string; success?: boolean }>;
+          const pubLines = pubResults.length > 0
+            ? pubResults.map(r => r.platformUrl
+                ? `\u2022 [${r.platform}](${r.platformUrl})`
+                : `\u2022 ${r.platform}: ${r.success === false ? '\u274c Falhou' : '\u23f3 Pendente'}`
+              ).join('\n')
+            : null;
 
-          const updatedText = [
-            `📺 *Canal:* \`${channelSlug}\``,
-            `📌 *Título:* *${escTopic}*`,
-            summaryPart,
-            `⏱️ *Duração:* \`${durationText}\``,
-            `⭐ *Score Editorial:* \`${scoreText}\``,
-            `💬 *Status:* ${statusText}`,
-          ].filter((x): x is string | null => x !== null).join('\n');
+          const detailText = [
+            `*KAIRO // DETALHES*`,
+            ``,
+            `"${escapeMarkdown(topic)}"`,
+            hookLine,
+            ``,
+            durationText ? `\u23f1 ${durationText} \u00b7 \ud83d\udcfa ${channelSlug}` : `\ud83d\udcfa ${channelSlug}`,
+            `\u2b50 Score editorial: \`${scoreText}\``,
+            pubLines ? `\n\ud83d\ude80 Publica\u00e7\u00e3o:\n${pubLines}` : null,
+          ].filter((x): x is string => x !== null).join('\n');
+
+          const backMarkup = {
+            inline_keyboard: [
+              [
+                { text: '\u2b05\ufe0f Voltar', callback_data: `show:${contentId}` }
+              ]
+            ]
+          };
 
           if (messageId) {
-            await editTelegramMessage(messageId, updatedText, telegramConfig, 'Markdown');
+            if (isVideo) {
+              await editTelegramCaption(messageId, detailText, telegramConfig, 'Markdown', backMarkup);
+            } else {
+              await editTelegramMessage(messageId, detailText, telegramConfig, 'Markdown', backMarkup);
+            }
           }
+          await answerCallbackQuery(cbQuery.id, telegramConfig);
 
         } catch (err) {
-          console.error(`[Supervisor] Erro ao processar callback query ${action}:`, err);
-          await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao processar ação.', true);
+          console.error('[Supervisor] Erro ao buscar detalhes:', err);
+          await answerCallbackQuery(cbQuery.id, telegramConfig, '\ud83d\udea8 Erro ao buscar detalhes.', true);
         }
       } else if (data.startsWith('reject_reason:')) {
         const parts = data.split(':');
@@ -399,8 +476,6 @@ async function pollTelegram(): Promise<void> {
           const feedbackEntry = SLUG_TO_FEEDBACK[reasonSlug];
           if (feedbackEntry) {
             reasonText = feedbackEntry.text;
-
-            // Grava feedback qualitativo estruturado na tabela editorial_feedback
             await pool.query(
               `INSERT INTO editorial_feedback (content_unit_id, source, category)
                VALUES ($1, 'telegram', $2::editorial_feedback_category)`,
@@ -409,32 +484,40 @@ async function pollTelegram(): Promise<void> {
             console.log(`[Supervisor] 📝 Feedback editorial gravado: ${feedbackEntry.category} (unit: ${contentId})`);
           }
 
-          // Transita o estado oficialmente para REJECTED enviando o motivo qualitativo
+          // Transita o estado oficialmente para REJECTED
           await processEvent(pool, 'REVIEW_RESULT', { contentId, channelId, action: 'reject', reason: reasonText });
           await answerCallbackQuery(cbQuery.id, telegramConfig, `❌ Rejeitado: ${reasonText}`);
+
+          const isVideo = !!metadata.telegramIsVideo;
 
           const chanRes = await pool.query('SELECT slug FROM channel_registry WHERE id = $1', [channelId]);
           const channelSlug = chanRes.rows[0]?.slug ?? 'geral';
 
-          const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
-          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : 'N/A';
-          const escTopic = escapeMarkdown(topic);
-          
           const script = (metadata.script || {}) as any;
-          const summary = script.description || metadata.researchPackage?.summary || script.hook || '';
-          const summaryPart = summary ? `📝 *Resumo:* _${escapeMarkdown(summary)}_` : null;
+          const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
+          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : null;
+          const hook = script.hook || script.cta || '';
+          const hookLine = hook ? `_${escapeMarkdown(hook.slice(0, 120))}_` : null;
 
           const updatedText = [
-            `📺 *Canal:* \`${channelSlug}\``,
-            `📌 *Título:* *${escTopic}*`,
-            summaryPart,
-            `⏱️ *Duração:* \`${durationText}\``,
-            `💬 *Status:* 🔴 Rejeitado: _${reasonText}_`,
-          ].filter((x): x is string | null => x !== null).join('\n');
+            `*KAIRO // REJEITADO*`,
+            ``,
+            `"${escapeMarkdown(topic)}"`,
+            hookLine,
+            ``,
+            durationText ? `⏱ ${durationText} · 📺 ${channelSlug}` : `📺 ${channelSlug}`,
+            ``,
+            `🔴 Rejeitado: _${escapeMarkdown(reasonText)}_`,
+          ].filter((x): x is string => x !== null).join('\n');
 
           if (messageId) {
-            await editTelegramMessage(messageId, updatedText, telegramConfig, 'Markdown');
+            if (isVideo) {
+              await editTelegramCaption(messageId, updatedText, telegramConfig, 'Markdown');
+            } else {
+              await editTelegramMessage(messageId, updatedText, telegramConfig, 'Markdown');
+            }
           }
+
         } catch (err) {
           console.error('[Supervisor] Erro ao processar reject_reason callback:', err);
           await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao processar descarte.', true);
@@ -454,66 +537,50 @@ async function pollTelegram(): Promise<void> {
           const channelId = contentUnit.channel_id;
           const topic = contentUnit.topic;
           const metadata = contentUnit.metadata || {};
+          const isVideo = !!metadata.telegramIsVideo;
 
           const chanRes = await pool.query('SELECT slug FROM channel_registry WHERE id = $1', [channelId]);
           const channelSlug = chanRes.rows[0]?.slug ?? 'geral';
 
           const score = (metadata.editorialScore || metadata.score) as number | undefined;
           const durationSeconds = metadata.script?.estimatedDurationSeconds || undefined;
-          
-          const scoreText = score !== undefined ? `${(score * 100).toFixed(0)}%` : 'N/A';
-          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : 'N/A';
-          const escTopic = escapeMarkdown(topic);
+          const durationText = durationSeconds !== undefined ? formatDuration(durationSeconds) : null;
 
           const script = (metadata.script || {}) as any;
-          const summary = script.description || metadata.researchPackage?.summary || script.hook || '';
-          const summaryPart = summary ? `📝 *Resumo:* _${escapeMarkdown(summary)}_` : null;
+          const hook = script.hook || script.cta || '';
+          const hookLine = hook ? `_${escapeMarkdown(hook.slice(0, 120))}_` : null;
+          const metaLine = durationText ? `⏱ ${durationText} · 📺 ${channelSlug}` : `📺 ${channelSlug}`;
 
+          // Restaura a caption no formato KAIRO original
           const detailText = [
-            `📺 *Canal:* \`${channelSlug}\``,
-            `📌 *Título:* *${escTopic}*`,
-            summaryPart,
-            `⏱️ *Duração:* \`${durationText}\``,
-            `⭐ *Score Editorial:* \`${scoreText}\``,
-            `💬 *Status:* 🟡 Aguardando Revisão`,
-          ].filter((x): x is string | null => x !== null).join('\n');
+            `*KAIRO // NOVA PRODUÇÃO*`,
+            ``,
+            `"${escapeMarkdown(topic)}"`,
+            hookLine,
+            ``,
+            metaLine,
+          ].filter((x): x is string => x !== null).join('\n');
 
-          let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL'] 
-            || (process.env['RAILWAY_PUBLIC_DOMAIN'] ? `https://${process.env['RAILWAY_PUBLIC_DOMAIN']}` : undefined)
-            || process.env['PUBLIC_URL']
-            || 'http://127.0.0.1:3000';
-          if (MISSION_CONTROL_URL.includes('localhost')) {
-            MISSION_CONTROL_URL = MISSION_CONTROL_URL.replace('localhost', '127.0.0.1');
-          }
-
-          const videoFile = metadata.videoFile;
-          const videoFilename = videoFile ? path.basename(videoFile) : undefined;
-          const previewUrl = videoFilename 
-            ? `${MISSION_CONTROL_URL}/api/media/${videoFilename}`
-            : `${MISSION_CONTROL_URL}/review`;
-          
+          // Botões KAIRO: [APROVAR] | [Editar][Detalhes][Rejeitar]
           const replyMarkup = {
             inline_keyboard: [
               [
-                { text: '▶️ Assistir', url: previewUrl },
-                { text: '📚 Ver Fontes', callback_data: `sources_story:${contentId}` }
+                { text: '✅  APROVAR', callback_data: `approve:${contentId}` },
               ],
               [
-                { text: '🟢 Publicar', callback_data: `approve:${contentId}` },
-                { text: '🔴 Rejeitar', callback_data: `reject:${contentId}` }
+                { text: '✏️ Editar', callback_data: `adjust:${contentId}` },
+                { text: 'ℹ️ Detalhes', callback_data: `details:${contentId}` },
+                { text: '❌ Rejeitar', callback_data: `reject:${contentId}` },
               ],
-              [
-                { text: '🧪 Trocar Hipótese VLS', callback_data: `swap_hypothesis:${contentId}` },
-                { text: '🔍 Por que esta História?', callback_data: `why_story:${contentId}` }
-              ],
-              [
-                { text: '⏭️ Pular esta História', callback_data: `skip_story:${contentId}` }
-              ]
             ]
           };
 
           if (messageId) {
-            await editTelegramMessage(messageId, detailText, telegramConfig, 'Markdown', replyMarkup);
+            if (isVideo) {
+              await editTelegramCaption(messageId, detailText, telegramConfig, 'Markdown', replyMarkup);
+            } else {
+              await editTelegramMessage(messageId, detailText, telegramConfig, 'Markdown', replyMarkup);
+            }
           }
           await answerCallbackQuery(cbQuery.id, telegramConfig);
 
@@ -909,8 +976,15 @@ async function pollTelegram(): Promise<void> {
         const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
         await sendTelegram('🚨 Erro ao iniciar pesquisa KDR.', telegramConfig);
       }
-    } else {
-      // Trata qualquer outro texto livre como criação de tema manual para o canal KAIRO (@90kairo)
+    } else if (text.startsWith('/novotema ') || text.startsWith('/sugerir ')) {
+      const topicText = text.replace(/^\/(novotema|sugerir)\s+/i, '').trim();
+      if (!topicText) {
+        const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+        await sendTelegram('⚠️ Uso: `/novotema <tema>` ou `/sugerir <tema>`', telegramConfig, 'Markdown');
+        continue;
+      }
+
+      // Trata comando como criação de tema manual para o canal KAIRO (@90kairo)
       const pool = getPool();
       try {
         const chanRes = await pool.query(
@@ -931,7 +1005,7 @@ async function pollTelegram(): Promise<void> {
           INSERT INTO content_units (org_id, channel_id, topic, state, metadata, attempt_counts)
           VALUES ($1, $2, $3, 'DISCOVERED', jsonb_build_object('topic', $3::text, 'origin', 'manual'), '{}')
           RETURNING id
-        `, [orgId, channelId, text]);
+        `, [orgId, channelId, topicText]);
 
         const contentId = insertRes.rows[0].id;
 
@@ -939,25 +1013,28 @@ async function pollTelegram(): Promise<void> {
         await pool.query(`
           INSERT INTO content_transitions (content_id, from_state, to_state, actor, reason)
           VALUES ($1, 'DISCOVERED', 'DISCOVERED', 'telegram-manual-theme', $2)
-        `, [contentId, `Produção manual iniciada via texto do Telegram: ${text}`]);
+        `, [contentId, `Produção manual iniciada via comando do Telegram: ${topicText}`]);
 
         // Enfileira o job na fila do pipeline
         const pipelineQueue = new Queue(SUPERVISOR_QUEUE, { connection });
         await pipelineQueue.add('EVALUATE_TRIGGER', {
           contentId,
           channelId,
-          topic: text,
+          topic: topicText,
         });
         await pipelineQueue.close();
 
         const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
-        const escTitle = escapeMarkdown(text);
+        const escTitle = escapeMarkdown(topicText);
         await sendTelegram(`⏳ *Tema Recebido:* *${escTitle}*\n\nIniciando a direção da narrativa e renderização do vídeo para o canal @90kairo! 🎬`, telegramConfig, 'Markdown');
       } catch (err) {
-        console.error('[Supervisor] Erro ao criar tema via texto livre:', err);
+        console.error('[Supervisor] Erro ao criar tema via comando manual:', err);
         const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
         await sendTelegram('🚨 Erro ao iniciar a produção do tema enviado.', telegramConfig);
       }
+    } else {
+      const { sendTelegram } = await import('@cos/notifications/dist/telegram.js');
+      await sendTelegram('Comando não reconhecido. Use /help para ver os comandos disponíveis.', telegramConfig);
     }
   }
 }
@@ -1020,6 +1097,8 @@ async function bootstrap() {
     {
       connection,
       concurrency: 5,
+      removeOnComplete: { count: 1000 },
+      removeOnFail: { count: 5000 },
     }
   );
 

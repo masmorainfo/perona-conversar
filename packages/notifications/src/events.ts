@@ -38,6 +38,12 @@ export interface EventPayload {
   message?: string | undefined;
   summary?: string | undefined;
   videoFilename?: string | undefined;
+  /** Caminho absoluto do arquivo de vídeo — usado pelo sendVideoWithCaption */
+  videoFile?: string | undefined;
+  /** Hook de abertura do roteiro (primeiros 20s) */
+  hook?: string | undefined;
+  /** CTA do roteiro */
+  cta?: string | undefined;
 }
 
 let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL'] ?? 'http://127.0.0.1:3000';
@@ -69,25 +75,33 @@ export function formatEvent(
 
   switch (type) {
     case 'PENDING_REVIEW': {
-      const scoreText = payload.score !== undefined
-        ? `${(payload.score * 100).toFixed(0)}%`
-        : 'N/A';
-      
+      // Hierarquia de gancho para o card KAIRO:
+      // Linha 1: Cabeçalho da marca
+      // Linha 2: Título curto (entre aspas)
+      // Linha 3: Hook/CTA em itálico (gancho de abertura)
+      // Linha 4: Metadados compactos (duração · canal)
       const durationText = payload.durationSeconds !== undefined
         ? formatDuration(payload.durationSeconds)
-        : 'N/A';
-
-      const summaryPart = payload.summary
-        ? `📝 *Resumo:* _${escapeMarkdown(payload.summary)}_`
         : null;
 
+      // Usa hook preferentemente; fallback para cta, depois summary
+      const hookText = payload.hook || payload.cta || payload.summary || null;
+      const hookLine = hookText
+        ? `_${escapeMarkdown(hookText.slice(0, 120))}_`
+        : null;
+
+      const metaLine = [
+        durationText ? `⏱ ${durationText}` : null,
+        payload.channelSlug ? `📺 ${payload.channelSlug}` : null,
+      ].filter(Boolean).join(' · ');
+
       return [
-        `📺 *Canal:*${channel}`,
-        `📌 *Título:* ${topic}`,
-        summaryPart,
-        `⏱️ *Duração:* \`${durationText}\``,
-        `⭐ *Score Editorial:* \`${scoreText}\``,
-        `💬 *Status:* 🟡 Aguardando Revisão`,
+        `*KAIRO // NOVA PRODUÇÃO*`,
+        ``,
+        `"${escapeMarkdown(payload.topic || 'Sem título')}"`,
+        hookLine,
+        ``,
+        metaLine || null,
       ].filter((x): x is string => x !== null).join('\n');
     }
 

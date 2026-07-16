@@ -178,31 +178,40 @@ export async function processEvent(
       const script = (metadata.script || {}) as any;
       const durationSeconds = script.estimatedDurationSeconds || undefined;
       const score = (metadata.editorialScore || metadata.score) as number | undefined;
-      const summary = script.description || metadata.researchPackage?.summary || script.hook || '';
+
+      // hook: abertura do roteiro (primeiros 20s); cta: chamada para ação
+      const hook = (script.hook as string | undefined) || undefined;
+      const cta = (script.cta as string | undefined) || undefined;
+      const summary = script.description || metadata.researchPackage?.summary || '';
 
       const videoFile = metadata.videoFile as string | undefined;
       const videoFilename = videoFile ? path.basename(videoFile) : undefined;
 
-      notify('PENDING_REVIEW', { 
-        contentId, 
-        topic, 
+      notify('PENDING_REVIEW', {
+        contentId,
+        topic,
         ...withChannel,
         durationSeconds,
         score,
         summary,
-        videoFilename
+        hook,
+        cta,
+        videoFilename,
+        videoFile,
       }).then(async (result) => {
         if (result?.ok && result.messageId) {
-          // Salva o messageId nos metadados da content_unit no banco
+          // Salva o messageId e o tipo de mensagem (vídeo ou texto) nos metadados
           const client = await pool.connect();
           try {
             await client.query(
-              `UPDATE content_units 
-               SET metadata = jsonb_set(metadata, '{telegramMessageId}', $1::text::jsonb) 
-               WHERE id = $2`,
-              [result.messageId, contentId]
+              `UPDATE content_units
+               SET metadata = metadata
+                 || jsonb_build_object('telegramMessageId', $1::int)
+                 || jsonb_build_object('telegramIsVideo', $2::boolean)
+               WHERE id = $3`,
+              [result.messageId, !!videoFile, contentId]
             );
-            console.log(`[Supervisor] Salvo telegramMessageId ${result.messageId} para contentId ${contentId}`);
+            console.log(`[Supervisor] Salvo telegramMessageId=${result.messageId} (isVideo=${!!videoFile}) para contentId ${contentId}`);
           } catch (err) {
             console.error('[Supervisor] Erro ao salvar telegramMessageId no BD:', err);
           } finally {
