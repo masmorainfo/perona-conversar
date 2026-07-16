@@ -338,6 +338,13 @@ export class MemoryProvider {
         const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
         // Onda C: margem aumentada 500ms → 800ms para evitar corte seco (ElevenLabs tem latência ligeiramente maior)
         scene.durationMs = realDurationMs + 800;
+      } else if (layout.narrationPath && fs.existsSync(layout.narrationPath)) {
+        // Áudio já existe (rerenderização): mede a duração real sem regerar
+        // Corrige o bug onde durationMs ficava em 5800ms (estimativa) após o primeiro render
+        const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
+        scene.durationMs = realDurationMs + 800;
+        assetUrls[`voiceover_scene_${idx}`] = layout.narrationPath;
+        console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: áudio existente medido = ${realDurationMs}ms → durationMs = ${scene.durationMs}ms`);
       }
 
       // 2. Gera imagem de IA se necessário
@@ -360,9 +367,11 @@ export class MemoryProvider {
 
     // Salva o manifest atualizado com durações reais no disco
     // Isso garante que o Video Compositor leia as durações corretas (não as estimativas)
+    const totalDurationMs = manifest.scenes.reduce((acc: number, s: any) => acc + (s.durationMs || 0), 0);
+    manifest.audioContext.totalDurationMs = totalDurationMs;
     const updatedManifestPath = path.join(assetsDir, 'story_manifest.json');
     fs.writeFileSync(updatedManifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
-    console.log(`[Memory Provider] ✅ Manifest atualizado com durações reais salvo em: ${updatedManifestPath}`);
+    console.log(`[Memory Provider] ✅ Manifest atualizado com durações reais. Total: ${totalDurationMs}ms (${(totalDurationMs/1000).toFixed(1)}s). Salvo em: ${updatedManifestPath}`);
 
     return { manifest, assetUrls };
   }

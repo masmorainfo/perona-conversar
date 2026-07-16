@@ -210,12 +210,15 @@ export async function compositeVideo(
     composition.durationInFrames = totalFrames;
 
     console.log(`[Video Compositor] Renderizando com Remotion (tema/arquétipo: ${canonArchetype ?? 'default'})...`);
+    const videoBitrate = process.env.REMOTION_VIDEO_BITRATE;
     await renderMedia({
       composition,
       serveUrl: bundleLocation,
       codec: 'h264',
       outputLocation: outputVideoPath,
       inputProps: remotionInputProps,
+      // Se REMOTION_VIDEO_BITRATE está definido, usa VBR com bitrate fixo; caso contrário usa CRF 23
+      ...(videoBitrate ? { videoBitrate } : { crf: 23 }),
       chromiumOptions: {
         disableWebSecurity: true,
       },
