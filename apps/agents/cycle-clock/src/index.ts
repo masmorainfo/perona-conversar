@@ -64,6 +64,20 @@ const MAX_OPPORTUNITIES_PER_CHANNEL = parseInt(
   10,
 );
 
+/**
+ * Timeout de staleness: qualquer content_unit parado em estado não-terminal
+ * por mais deste valor em horas é automaticamente movido para ABANDONED.
+ *
+ * Garante que uma falha silenciosa (agente travado, decisão não tomada)
+ * nunca bloqueie o próximo ciclo operacional indefinidamente.
+ *
+ * Default: 48h. Configurável via STALENESS_THRESHOLD_HOURS.
+ */
+const STALENESS_THRESHOLD_HOURS = parseInt(
+  process.env['STALENESS_THRESHOLD_HOURS'] ?? '48',
+  10,
+);
+
 // ─── Infraestrutura ────────────────────────────────────────────────────────────
 
 const { Pool } = pg;
@@ -89,6 +103,76 @@ const supervisorQueue = new Queue(SUPERVISOR_QUEUE, { connection: redisConnectio
 
 // ─── Ciclo operacional ─────────────────────────────────────────────────────────
 
+/**
+ * Guarda de staleness — roda ANTES de cada ciclo operacional.
+ *
+ * Abandona automaticamente qualquer content_unit que esteja parado
+ * em estado não-terminal por mais de STALENESS_THRESHOLD_HOURS horas.
+ *
+ * Razão:
+ *   Um item travado (agente com bug, decisão editorial não tomada, etc.)
+ *   não deve bloquear a produção inteira indefinidamente.
+ *   A decisão de publicar ou rejeitar pertence ao editor — mas se ele
+ *   não agiu em 48h, o item é tratado como não aprovado por omissão.
+ */
+async function runStalenessGuard(): Promise<void> {
+  const TERMINAL_STATES = [
+    'PUBLISHED',
+    'PUBLISHED_PARTIAL',
+    'ANALYZED',
+    'LEARNED',
+    'REJECTED',
+    'ABANDONED',
+    'DEFERRED',
+    'FAILED_QA',
+  ];
+
+  const terminalList = TERMINAL_STATES.map((_, i) => `$${i + 1}`).join(', ');
+
+  const { rows: staleUnits } = await pool.query<{ id: string; state: string; topic: string; age_hours: string }>(
+    `SELECT cu.id, cu.state, cu.topic, cr.slug as channel,
+            EXTRACT(EPOCH FROM (NOW() - cu.updated_at)) / 3600 as age_hours
+     FROM content_units cu
+     LEFT JOIN channel_registry cr ON cu.channel_id = cr.id
+     WHERE cu.state NOT IN (${terminalList})
+     AND cu.updated_at < NOW() - INTERVAL '${STALENESS_THRESHOLD_HOURS} hours'`,
+    TERMINAL_STATES
+  );
+
+  if (staleUnits.length === 0) {
+    console.log(`[Cycle Clock] [StalenessGuard] Nenhuma unidade estagnada encontrada.`);
+    return;
+  }
+
+  console.log(`[Cycle Clock] [StalenessGuard] ⚠️ ${staleUnits.length} unidade(s) estagnadas (>${STALENESS_THRESHOLD_HOURS}h). Abandonando automaticamente...`);
+
+  const staleIds = staleUnits.map(u => u.id);
+  const idPlaceholders = staleIds.map((_, i) => `$${i + 1}`).join(', ');
+
+  const { rowCount } = await pool.query(
+    `UPDATE content_units
+     SET state = 'ABANDONED',
+         updated_at = NOW(),
+         metadata = jsonb_set(
+           COALESCE(metadata, '{}'::jsonb),
+           '{abandonReason}',
+           '"timeout - sem decisao editorial ou falha de agente em >${STALENESS_THRESHOLD_HOURS}h"'::jsonb
+         )
+     WHERE id IN (${idPlaceholders})
+     AND state != 'ABANDONED'`,
+    staleIds
+  );
+
+  for (const unit of staleUnits) {
+    const ageH = parseFloat(unit.age_hours).toFixed(1);
+    console.log(
+      `[Cycle Clock] [StalenessGuard]   → ABANDONED: [${unit.state}] "${unit.topic}" (${ageH}h sem atualização)`
+    );
+  }
+
+  console.log(`[Cycle Clock] [StalenessGuard] ✓ ${rowCount ?? 0} unidade(s) abandonadas automaticamente.`);
+}
+
 interface CycleResult {
   channelsEvaluated: number;
   channelsTriggered: number;
@@ -108,6 +192,9 @@ interface CycleResult {
  */
 async function runCycle(reason: 'scheduled' | 'startup'): Promise<CycleResult> {
   console.log(`\n[Cycle Clock] ─── Iniciando ciclo (${reason}) ───`);
+
+  // Guarda de staleness: limpa unidades travadas antes de avaliar oportunidades
+  await runStalenessGuard();
 
   const result: CycleResult = {
     channelsEvaluated: 0,
@@ -146,13 +233,36 @@ async function runCycle(reason: 'scheduled' | 'startup'): Promise<CycleResult> {
 
     // --- PROTEÇÃO DE CONCORRÊNCIA ---
     // Verifica se o canal já possui um conteúdo em processo de produção.
-    const { rows: activeUnits } = await pool.query<{ id: string; state: string }>(`
-      SELECT id, state 
-      FROM content_units 
-      WHERE channel_id = $1 
-      AND state NOT IN ('PUBLISHED', 'PUBLISHED_PARTIAL', 'ANALYZED', 'LEARNED', 'REJECTED', 'ABANDONED', 'DEFERRED')
-      LIMIT 1
-    `, [channel.id]);
+    //
+    // Estados TERMINAIS (não bloqueiam o próximo ciclo):
+    //   PUBLISHED, PUBLISHED_PARTIAL — ciclo completo, sucesso
+    //   ANALYZED, LEARNED            — pós-publicação, aprendizado
+    //   REJECTED                     — rejeitado pelo editor
+    //   ABANDONED                    — descartado operacionalmente
+    //   DEFERRED                     — adiado explicitamente
+    //   FAILED_QA                    — falha na assinatura editorial;
+    //                                  este item específico não vingou,
+    //                                  mas a esteira está LIVRE para novo ciclo.
+    const TERMINAL_STATES = [
+      'PUBLISHED',
+      'PUBLISHED_PARTIAL',
+      'ANALYZED',
+      'LEARNED',
+      'REJECTED',
+      'ABANDONED',
+      'DEFERRED',
+      'FAILED_QA',  // ← estado terminal: falha editorial, não falha de infra
+    ];
+
+    const terminalList = TERMINAL_STATES.map((_, i) => `$${i + 2}`).join(', ');
+    const { rows: activeUnits } = await pool.query<{ id: string; state: string }>(
+      `SELECT id, state 
+       FROM content_units 
+       WHERE channel_id = $1 
+       AND state NOT IN (${terminalList})
+       LIMIT 1`,
+      [channel.id, ...TERMINAL_STATES]
+    );
 
     if (activeUnits.length > 0) {
       console.log(
