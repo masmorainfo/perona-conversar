@@ -50,7 +50,8 @@ export class TikTokAdapter implements PlatformAdapter {
       const presignRes = await zernio.media.getMediaPresignedUrl({
         body: {
           filename,
-          contentType: 'video/mp4'
+          contentType: 'video/mp4',
+          size: fileSize,
         }
       });
       
@@ -61,37 +62,53 @@ export class TikTokAdapter implements PlatformAdapter {
         throw new Error(`Falha ao obter URLs de upload: ${JSON.stringify(presignRes.data)}`);
       }
       
-      // ── Upload via stream para não carregar o vídeo inteiro em memória ──
-      // Node fetch aceita ReadableStream como body; passamos o stream nativo do fs.
-      console.log(`[TikTokAdapter] URL de upload obtida. Enviando vídeo via stream (${fileSizeMB} MB)...`);
+      // ── Upload via https.request nativo (garante Content-Length + pipe stream) ──
+      // Node 18+ fetch ignora Content-Length quando body é ReadableStream (duplex:half bug).
+      // S3 pré-assinado exige Content-Length exato; sem ele, rejeita ou recebe body vazio.
+      console.log(`[TikTokAdapter] URL de upload obtida. Enviando vídeo via https.request (${fileSizeMB} MB)...`);
       
-      // Importar dinamicamente para suporte ao Node 18+
-      const { createReadStream } = fs;
-      const { Readable } = await import('stream');
+      const { https: httpsModule, http: httpModule } = await (async () => {
+        const https = await import('https');
+        const http = await import('http');
+        return { https, http };
+      })();
       
-      // Node's native fetch requer um ReadableStream web (não Node.js stream).
-      // Convertemos via Readable.toWeb()
-      const nodeStream = createReadStream(videoFilePath);
-      const webStream = Readable.toWeb(nodeStream) as ReadableStream;
-      
-      const s3Res = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'video/mp4',
-          'Content-Length': String(fileSize),
-        },
-        body: webStream,
-        // @ts-ignore — duplex necessário para streaming body no Node 18+
-        duplex: 'half',
+      await new Promise<void>((resolve, reject) => {
+        const parsedUrl = new URL(uploadUrl);
+        const isHttps = parsedUrl.protocol === 'https:';
+        const reqModule = isHttps ? httpsModule : httpModule;
+        
+        const req = (reqModule as typeof httpsModule).request(
+          {
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port || (isHttps ? 443 : 80),
+            path: parsedUrl.pathname + parsedUrl.search,
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': fileSize,
+            },
+          },
+          (res) => {
+            // Consumir response body para liberar conexão
+            res.resume();
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve();
+            } else {
+              reject(new Error(`Falha no upload S3: ${res.statusCode} ${res.statusMessage}`));
+            }
+          }
+        );
+        
+        req.on('error', (err) => reject(new Error(`Erro de rede no upload S3: ${err.message}`)));
+        
+        // Pipe do arquivo direto para o request
+        const readStream = fs.createReadStream(videoFilePath);
+        readStream.on('error', (err) => reject(new Error(`Erro ao ler arquivo: ${err.message}`)));
+        readStream.pipe(req);
       });
-      
-      if (!s3Res.ok) {
-        let s3ErrText = '';
-        try { s3ErrText = await s3Res.text(); } catch (e) {}
-        throw new Error(`Falha no upload S3: ${s3Res.status} ${s3Res.statusText} - ${s3ErrText}`);
-      }
 
-      console.log(`[TikTokAdapter] Upload OK: ${mediaUrl}`);
+      console.log(`[TikTokAdapter] Upload S3 OK: ${mediaUrl}`);
 
       // ── Step 2: Montar conteúdo (título + descrição + hashtags) ─────
       const title = metadata.title || 'COS Video';
