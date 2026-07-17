@@ -93,17 +93,37 @@ function buildEdges(activeUnit: any) {
   }));
 }
 
+function formatSafeDate(dateStr: string | undefined): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime()) || d.getFullYear() > 2100 || d.getFullYear() < 2000) {
+      return `⚠️ Data inválida (${dateStr})`;
+    }
+    return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  } catch {
+    return `⚠️ Data inválida (${dateStr})`;
+  }
+}
+
 function buildPayload(unit: any, nodeId: string) {
   if (!unit) return { info: 'Nenhum job ativo selecionado.' };
   const meta = unit.metadata ?? {};
 
   switch (nodeId) {
     case 'DISCOVERED':
-      return { topic: unit.topic, channel: unit.channel_name, insertedAt: unit.created_at };
+      return { topic: unit.topic, channel: unit.channel_name, insertedAt: formatSafeDate(unit.created_at) };
     case 'EVALUATED':
-      return meta.evaluation ?? { info: 'Aguardando dado real do Editorial Agent.' };
+      return meta.editorialScore !== undefined
+        ? {
+            score: `${(meta.editorialScore * 100).toFixed(0)}%`,
+            direction: meta.editorialDirection ?? 'N/A',
+            canonArchetype: meta.canonArchetype ?? 'N/A',
+            canonTargetEmotion: meta.canonTargetEmotion ?? 'N/A',
+          }
+        : { info: 'Aguardando dado real do Editorial Agent.' };
     case 'APPROVED':
-      return { topic: unit.topic, state: unit.state, approvedAt: unit.updated_at };
+      return { topic: unit.topic, state: unit.state, approvedAt: formatSafeDate(unit.updated_at) };
     case 'RESEARCHED':
       return meta.researchPackage
         ? {
@@ -117,22 +137,53 @@ function buildPayload(unit: any, nodeId: string) {
       return meta.script
         ? {
             hookPreview: meta.script.hook?.slice(0, 120) + '...',
-            durationTarget: meta.script.durationSeconds,
+            durationTarget: meta.script.estimatedDurationSeconds ?? meta.script.durationSeconds,
             sectionsCount: meta.script.sections?.length ?? 0,
           }
         : { info: 'Script ainda não gerado.' };
     case 'CRITIC_OK':
-      return meta.criticReview ?? { info: 'Revisão do Critic ainda não disponível.' };
+      return meta.criticEvaluation
+        ? {
+            approved: meta.criticEvaluation.approved ?? true,
+            feedback: meta.criticEvaluation.feedback ?? meta.criticEvaluation.summary ?? 'Aprovado pelo Critic',
+          }
+        : { info: 'Revisão do Critic ainda não disponível.' };
     case 'PRODUCED':
-      return meta.mediaPackage ?? { info: 'Pacote de mídia ainda não gerado.' };
+      return meta.assetUrls
+        ? {
+            assetCount: Object.keys(meta.assetUrls).length,
+            assets: Object.keys(meta.assetUrls).slice(0, 5),
+            storyManifest: meta.storyManifestPath ? '✓ Presente' : '✗ Ausente',
+          }
+        : { info: 'Pacote de mídia ainda não gerado.' };
     case 'RENDERED':
-      return meta.renderOutput ?? { info: 'Saída de renderização ainda não disponível.' };
+      return meta.videoFile
+        ? {
+            videoFile: meta.videoFile,
+            qaWarnings: meta.qaWarnings ?? 'Nenhum',
+          }
+        : { info: 'Saída de renderização ainda não disponível.' };
     case 'PENDING_REVIEW':
-      return meta.qcResult ?? { info: 'Aguardando aprovação humana (Review).' };
+      return {
+        qcScore: meta.qcScore ?? 'N/A',
+        qcChecklist: meta.qcChecklist ?? 'N/A',
+        cinematicEvaluation: meta.cinematicEvaluation
+          ? { approved: meta.cinematicEvaluation.approved, feedback: meta.cinematicEvaluation.feedback ?? meta.cinematicEvaluation.summary }
+          : 'N/A',
+        editorialScore: meta.editorialScore !== undefined ? `${(meta.editorialScore * 100).toFixed(0)}%` : 'N/A',
+      };
     case 'READY_TO_PUBLISH':
       return { info: 'Pronto para publicação.' };
     case 'PUBLISHED':
-      return meta.publishResult ?? { platform: 'youtube', info: 'Publicação concluída.' };
+      return meta.publicationResults
+        ? {
+            platforms: (meta.publicationResults as any[]).map((r: any) => ({
+              platform: r.platform,
+              success: r.success,
+              url: r.platformUrl ?? 'N/A',
+            })),
+          }
+        : { info: 'Publicação concluída.' };
     default:
       return { info: 'Selecione um nó do pipeline para inspecionar seus metadados.' };
   }
