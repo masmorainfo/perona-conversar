@@ -95,9 +95,32 @@ export async function processEvent(
         platform: r.platform,
         success: r.status === 'success',
         platformUrl: r.platform_url,
+        error: r.error_message,
       }));
       
-      event = { type: 'PUBLISH_COMPLETE', results };
+      const anySuccess = results.some((r: any) => r.success);
+      const allFailed  = results.every((r: any) => !r.success);
+      
+      if (allFailed) {
+        // ⚠️ Todos os uploads falharam — não transicionar para PUBLISHED.
+        // Logamos o erro detalhado e retornamos sem emitir evento.
+        // O item permanece em READY_TO_PUBLISH para possível retry manual.
+        const errors = results.map((r: any) => `${r.platform}: ${r.error || 'unknown'}`).join(' | ');
+        console.error(`[Supervisor] ❌ Todos os uploads falharam para ${contentId}. Erros: ${errors}`);
+        console.error(`[Supervisor] ⚠️  Item permanece em READY_TO_PUBLISH para retry. Use o painel para retentar.`);
+        // Notificar operador no Telegram sobre a falha real
+        notify('TEST', {
+          message: `❌ *Publicação falhou* em todas as plataformas para \`${contentId.slice(0, 8)}\`.\n\n${errors}\n\nItem permanece em READY_TO_PUBLISH — aguardando retry.`,
+        } as any).catch(() => {});
+        return; // Não emitir PUBLISH_COMPLETE
+      }
+      
+      if (anySuccess && !allFailed) {
+        // Publicação parcial — pelo menos uma plataforma teve sucesso
+        event = { type: 'PUBLISH_COMPLETE', results };
+      } else {
+        event = { type: 'PUBLISH_COMPLETE', results };
+      }
     } catch (err) {
       console.error('[Supervisor] Error checking publication status:', err);
       return;
