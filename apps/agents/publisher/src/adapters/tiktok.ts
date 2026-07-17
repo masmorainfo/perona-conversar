@@ -39,76 +39,90 @@ export class TikTokAdapter implements PlatformAdapter {
       const { Zernio } = await import('@zernio/node');
       const zernio = new Zernio({ apiKey });
 
-      // ── Step 1: Upload vídeo via Zernio Presigned URL (streaming) ──
-      const stats = fs.statSync(videoFilePath);
-      const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
-      const fileSize = stats.size;
-      console.log(`[TikTokAdapter] Solicitando URL de upload para Zernio... (Tamanho do vídeo: ${fileSizeMB} MB)`);
-      
-      const filename = videoFilePath.split(/[/\\]/).pop() || 'video.mp4';
-      
-      const presignRes = await zernio.media.getMediaPresignedUrl({
-        body: {
-          filename,
-          contentType: 'video/mp4',
-          size: fileSize,
-        }
-      });
-      
-      const uploadUrl = (presignRes.data as any)?.uploadUrl;
-      const mediaUrl = (presignRes.data as any)?.publicUrl;
-      
-      if (!uploadUrl || !mediaUrl) {
-        throw new Error(`Falha ao obter URLs de upload: ${JSON.stringify(presignRes.data)}`);
-      }
-      
-      // ── Upload via https.request nativo (garante Content-Length + pipe stream) ──
-      // Node 18+ fetch ignora Content-Length quando body é ReadableStream (duplex:half bug).
-      // S3 pré-assinado exige Content-Length exato; sem ele, rejeita ou recebe body vazio.
-      console.log(`[TikTokAdapter] URL de upload obtida. Enviando vídeo via https.request (${fileSizeMB} MB)...`);
-      
-      const { https: httpsModule, http: httpModule } = await (async () => {
-        const https = await import('https');
-        const http = await import('http');
-        return { https, http };
-      })();
-      
-      await new Promise<void>((resolve, reject) => {
-        const parsedUrl = new URL(uploadUrl);
-        const isHttps = parsedUrl.protocol === 'https:';
-        const reqModule = isHttps ? httpsModule : httpModule;
-        
-        const req = (reqModule as typeof httpsModule).request(
-          {
-            hostname: parsedUrl.hostname,
-            port: parsedUrl.port || (isHttps ? 443 : 80),
-            path: parsedUrl.pathname + parsedUrl.search,
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'video/mp4',
-              'Content-Length': fileSize,
-            },
-          },
-          (res) => {
-            // Consumir response body para liberar conexão
-            res.resume();
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              resolve();
-            } else {
-              reject(new Error(`Falha no upload S3: ${res.statusCode} ${res.statusMessage}`));
-            }
-          }
-        );
-        
-        req.on('error', (err) => reject(new Error(`Erro de rede no upload S3: ${err.message}`)));
-        
-        // Pipe do arquivo direto para o request
-        const readStream = fs.createReadStream(videoFilePath);
-        readStream.on('error', (err) => reject(new Error(`Erro ao ler arquivo: ${err.message}`)));
-        readStream.pipe(req);
-      });
+      // ── Step 1: Obter URL pública do vídeo ──────────────────────────
+      // Prioridade: videoUrl já disponível no metadata (upload feito pelo Render)
+      // Fallback: fazer upload do arquivo local (só funciona se o arquivo existe neste container)
+      let mediaUrl: string;
 
-      console.log(`[TikTokAdapter] Upload S3 OK: ${mediaUrl}`);
+      const preExistingVideoUrl = metadata.videoUrl as string | undefined;
+
+      if (preExistingVideoUrl) {
+        // URL já disponível — pula o upload, vai direto para createPost
+        console.log(`[TikTokAdapter] videoUrl pré-existente encontrada no metadata. Pulando upload S3.`);
+        console.log(`[TikTokAdapter] URL: ${preExistingVideoUrl}`);
+        mediaUrl = preExistingVideoUrl;
+      } else {
+        // Fallback: tentar upload do arquivo local
+        if (!fs.existsSync(videoFilePath)) {
+          throw new Error(`Arquivo de vídeo não encontrado: ${videoFilePath}. Use videoUrl no metadata para evitar dependência de filesystem cross-container.`);
+        }
+        const stats = fs.statSync(videoFilePath);
+        const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+        const fileSize = stats.size;
+        console.log(`[TikTokAdapter] Solicitando URL de upload para Zernio... (Tamanho do vídeo: ${fileSizeMB} MB)`);
+        
+        const filename = videoFilePath.split(/[/\\]/).pop() || 'video.mp4';
+        
+        const presignRes = await zernio.media.getMediaPresignedUrl({
+          body: {
+            filename,
+            contentType: 'video/mp4',
+            size: fileSize,
+          }
+        });
+        
+        const uploadUrl = (presignRes.data as any)?.uploadUrl;
+        const publicUrl = (presignRes.data as any)?.publicUrl;
+        
+        if (!uploadUrl || !publicUrl) {
+          throw new Error(`Falha ao obter URLs de upload: ${JSON.stringify(presignRes.data)}`);
+        }
+        
+        // Upload via https.request nativo (garante Content-Length + pipe stream)
+        console.log(`[TikTokAdapter] URL de upload obtida. Enviando vídeo via https.request (${fileSizeMB} MB)...`);
+        
+        const { https: httpsModule, http: httpModule } = await (async () => {
+          const https = await import('https');
+          const http = await import('http');
+          return { https, http };
+        })();
+        
+        await new Promise<void>((resolve, reject) => {
+          const parsedUrl = new URL(uploadUrl);
+          const isHttps = parsedUrl.protocol === 'https:';
+          const reqModule = isHttps ? httpsModule : httpModule;
+          
+          const req = (reqModule as typeof httpsModule).request(
+            {
+              hostname: parsedUrl.hostname,
+              port: parsedUrl.port || (isHttps ? 443 : 80),
+              path: parsedUrl.pathname + parsedUrl.search,
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'video/mp4',
+                'Content-Length': fileSize,
+              },
+            },
+            (res) => {
+              res.resume();
+              if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                resolve();
+              } else {
+                reject(new Error(`Falha no upload S3: ${res.statusCode} ${res.statusMessage}`));
+              }
+            }
+          );
+          
+          req.on('error', (err) => reject(new Error(`Erro de rede no upload S3: ${err.message}`)));
+          
+          const readStream = fs.createReadStream(videoFilePath);
+          readStream.on('error', (err) => reject(new Error(`Erro ao ler arquivo: ${err.message}`)));
+          readStream.pipe(req);
+        });
+
+        console.log(`[TikTokAdapter] Upload S3 OK: ${publicUrl}`);
+        mediaUrl = publicUrl;
+      }
 
       // ── Step 2: Montar conteúdo (título + descrição + hashtags) ─────
       const title = metadata.title || 'COS Video';
