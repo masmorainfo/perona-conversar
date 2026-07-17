@@ -208,6 +208,7 @@ export async function processEvent(
       const summary = script.description || metadata.researchPackage?.summary || '';
 
       const videoFile = metadata.videoFile as string | undefined;
+      const videoUrl = metadata.videoUrl as string | undefined;  // URL pública cross-container
       const videoFilename = videoFile ? path.basename(videoFile) : undefined;
 
       notify('PENDING_REVIEW', {
@@ -221,6 +222,7 @@ export async function processEvent(
         cta,
         videoFilename,
         videoFile,
+        videoUrl,  // URL pública do Zernio S3 — usada pelo Telegram em vez do path local
       }).then(async (result) => {
         if (result?.ok && result.messageId) {
           // Salva o messageId e o tipo de mensagem (vídeo ou texto) nos metadados
@@ -375,7 +377,7 @@ function mapJobToEvent(jobType: string, data: any): ContentMachineEvent | null {
     case 'MEDIA_RESULT':
       return { type: 'MEDIA_COMPLETE', assetUrls: data.assetUrls };
     case 'RENDER_RESULT':
-      return { type: 'RENDER_COMPLETE', videoFile: data.videoFilePath, qaWarnings: data.qaWarnings };
+      return { type: 'RENDER_COMPLETE', videoFile: data.videoFilePath, videoUrl: data.videoUrl, qaWarnings: data.qaWarnings };
     case 'QUALITY_RESULT':
       if (data.approved) return { type: 'QC_PASS', score: data.score, checklist: data.checklist };
       else return { type: 'QC_FAIL', reason: data.reason || 'Failed QC' };

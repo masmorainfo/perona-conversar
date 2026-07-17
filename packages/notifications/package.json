@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "typescript": "*"
+  },
+  "dependencies": {
+    "undici": "^8.7.0"
   }
 }

@@ -173,7 +173,7 @@ async function sendTelegramDirect(
 async function bootstrap() {
   console.log('🔬 Iniciando KDR Agent (KAIRO Deep Research)...');
 
-  const worker = new Worker(KDR_QUEUE, processKDRJob, { connection, concurrency: 1 });
+  const worker = new Worker(KDR_QUEUE, processKDRJob, { connection, concurrency: 1, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
 
   worker.on('ready', () => console.log(`✅ KDR Agent ouvindo fila: ${KDR_QUEUE}`));
   worker.on('completed', (job: Job | undefined) => console.log(`[KDR] Job ${job?.id} concluído.`));

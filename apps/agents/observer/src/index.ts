@@ -45,7 +45,7 @@ async function runObserverCycle(job: Job) {
 async function bootstrap() {
   console.log('🚀 Iniciando Opportunity Engine (Worker)...');
   
-  const worker = new Worker(OPPORTUNITY_TRIGGER_QUEUE, runObserverCycle, { connection, concurrency: 1 });
+  const worker = new Worker(OPPORTUNITY_TRIGGER_QUEUE, runObserverCycle, { connection, concurrency: 1, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
   
   worker.on('ready', () => {
     console.log(`✅ Ouve fila: ${OPPORTUNITY_TRIGGER_QUEUE}`);

@@ -115,7 +115,7 @@ async function bootstrap() {
       // Let's check how we named it in eventHandler.ts: `publish:youtube:${channelId}`
       
       const qName = `publish-${platform}-${channelId}`;
-      const worker = new Worker(qName, processPublishJob, { connection, concurrency: 2 });
+      const worker = new Worker(qName, processPublishJob, { connection, concurrency: 2, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
       
       worker.on('ready', () => console.log(`✅ Ouve fila: ${qName}`));
       worker.on('error', err => console.error(`🚨 Erro no worker ${qName}:`, err));

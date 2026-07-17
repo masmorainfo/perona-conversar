@@ -194,6 +194,52 @@ export async function sendVideoWithCaption(
 }
 
 /**
+ * Envia vídeo ao Telegram passando uma URL pública.
+ * O Telegram baixa o arquivo diretamente — o container não precisa ter o vídeo localmente.
+ * Preferido sobre sendVideoWithCaption quando videoUrl está disponível.
+ */
+export async function sendVideoUrlWithCaption(
+  videoUrl: string,
+  caption: string,
+  config: TelegramConfig,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
+): Promise<SendResult> {
+  try {
+    const url = `${TELEGRAM_API}/bot${config.botToken}/sendVideo`;
+    const body: Record<string, unknown> = {
+      chat_id: config.chatId,
+      video: videoUrl,
+      caption: caption.slice(0, 1024),
+      parse_mode: 'Markdown',
+      supports_streaming: true,
+    };
+    if (replyMarkup) {
+      body['reply_markup'] = replyMarkup;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`[Notifications] Telegram sendVideo (URL) error ${response.status}: ${err}`);
+      return { ok: false, error: err };
+    }
+
+    const data = (await response.json()) as any;
+    return { ok: true, messageId: data.result?.message_id };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Notifications] Falha ao enviar vídeo (URL) para Telegram: ${msg}`);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
  * Edita o texto de uma mensagem de texto enviada anteriormente.
  * Para mensagens de vídeo, use editTelegramCaption em vez desta.
  */

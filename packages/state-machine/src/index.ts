@@ -40,7 +40,7 @@ export type ContentMachineEvent =
   | { type: 'CRITIC_FAIL'; evaluation: ContentMachineMetadata }
   | { type: 'STORYBOARD_COMPLETE'; manifestPath: string }
   | { type: 'MEDIA_COMPLETE'; assetUrls: Record<string, string> }
-  | { type: 'RENDER_COMPLETE'; videoFile: string; qaWarnings?: string[] }
+  | { type: 'RENDER_COMPLETE'; videoFile: string; videoUrl?: string; qaWarnings?: string[] }
   | { type: 'QC_PASS'; score: number; checklist: ContentMachineMetadata }
   | { type: 'QC_FAIL'; reason: string }
   | { type: 'QA_FAIL_DETERMINISTIC'; reason: string }
@@ -163,6 +163,7 @@ export const contentMachine = setup({
         return { 
           ...context.metadata, 
           videoFile: event.videoFile,
+          ...(event.videoUrl ? { videoUrl: event.videoUrl } : {}),
           ...(event.qaWarnings ? { qaWarnings: event.qaWarnings } : {})
         }
       },

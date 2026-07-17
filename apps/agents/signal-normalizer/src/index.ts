@@ -204,7 +204,7 @@ async function processRawSignal(job: Job<RawSignalJobData>) {
 async function bootstrap() {
   console.log('🚀 Iniciando Signal Normalizer Worker (CLP — Content Localization Policy)...');
 
-  const worker = new Worker(RAW_SIGNALS_QUEUE, processRawSignal, { connection, concurrency: 5 });
+  const worker = new Worker(RAW_SIGNALS_QUEUE, processRawSignal, { connection, concurrency: 5, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
 
   worker.on('ready', () => {
     console.log(`✅ Ouve fila: ${RAW_SIGNALS_QUEUE}`);

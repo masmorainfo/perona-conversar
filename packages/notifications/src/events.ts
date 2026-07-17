@@ -38,8 +38,10 @@ export interface EventPayload {
   message?: string | undefined;
   summary?: string | undefined;
   videoFilename?: string | undefined;
-  /** Caminho absoluto do arquivo de vídeo — usado pelo sendVideoWithCaption */
+  /** Caminho absoluto do arquivo de vídeo — usado pelo sendVideoWithCaption (fallback local) */
   videoFile?: string | undefined;
+  /** URL pública do vídeo no Zernio S3 — preferida por ser cross-container */
+  videoUrl?: string | undefined;
   /** Hook de abertura do roteiro (primeiros 20s) */
   hook?: string | undefined;
   /** CTA do roteiro */

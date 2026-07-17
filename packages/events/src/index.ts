@@ -188,6 +188,8 @@ export interface RenderResultData {
   contentId: string
   channelId: string
   videoFilePath: string
+  /** URL pública do vídeo no Zernio S3 — disponível entre containers */
+  videoUrl?: string
 }
 
 /** Emitido pelo Supervisor para o Quality Control */

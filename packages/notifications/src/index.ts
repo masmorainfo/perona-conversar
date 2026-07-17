@@ -17,6 +17,7 @@
 import {
   sendTelegram,
   sendVideoWithCaption,
+  sendVideoUrlWithCaption,
   type TelegramConfig,
   type TelegramInlineKeyboardMarkup,
   type SendResult,
@@ -27,6 +28,7 @@ export type { NotificationEventType, EventPayload } from './events.js';
 export {
   sendTelegram,
   sendVideoWithCaption,
+  sendVideoUrlWithCaption,
   getUpdates,
   editTelegramMessage,
   editTelegramCaption,
@@ -103,7 +105,24 @@ export async function notify(
       ],
     };
 
-    // Tenta enviar como vídeo nativo se o arquivo existir
+    // Tenta enviar como vídeo nativo — prioriza URL pública (cross-container) sobre path local
+    if (payload.videoUrl) {
+      const videoResult = await sendVideoUrlWithCaption(
+        payload.videoUrl,
+        message,
+        _config,
+        replyMarkup,
+      ).catch((err) => {
+        console.warn('[Notifications] sendVideoUrlWithCaption falhou, tentando path local:', err);
+        return { ok: false, error: String(err) } as SendResult;
+      });
+
+      if (videoResult.ok) {
+        return videoResult;
+      }
+      console.warn('[Notifications] Fallback para sendVideoWithCaption via path local.');
+    }
+
     if (payload.videoFile) {
       const videoResult = await sendVideoWithCaption(
         payload.videoFile,

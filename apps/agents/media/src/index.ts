@@ -113,13 +113,13 @@ async function bootstrap() {
   for (const channelId of channelIds) {
     // 1. Ouvir fila storyboard
     const storyboardQName = queueName('storyboard', channelId);
-    const storyboardWorker = new Worker(storyboardQName, processStoryboardJob, { connection, concurrency: 2 });
+    const storyboardWorker = new Worker(storyboardQName, processStoryboardJob, { connection, concurrency: 2, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
     storyboardWorker.on('ready', () => console.log(`✅ Ouve fila: ${storyboardQName}`));
     storyboardWorker.on('error', err => console.error(`🚨 Erro no worker ${storyboardQName}:`, err));
 
     // 2. Ouvir fila media
     const mediaQName = queueName('media', channelId);
-    const mediaWorker = new Worker(mediaQName, processMediaJob, { connection, concurrency: 2 });
+    const mediaWorker = new Worker(mediaQName, processMediaJob, { connection, concurrency: 2, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
     mediaWorker.on('ready', () => console.log(`✅ Ouve fila: ${mediaQName}`));
     mediaWorker.on('error', err => console.error(`🚨 Erro no worker ${mediaQName}:`, err));
   }

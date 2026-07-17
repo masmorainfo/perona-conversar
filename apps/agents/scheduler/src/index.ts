@@ -147,7 +147,7 @@ async function evaluateOpportunities() {
 async function bootstrap() {
   console.log('⏳ Iniciando Intelligence Scheduler...');
   
-  const worker = new Worker(NORMALIZED_SIGNAL_QUEUE, processSignal, { connection, concurrency: 1 });
+  const worker = new Worker(NORMALIZED_SIGNAL_QUEUE, processSignal, { connection, concurrency: 1, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
   
   worker.on('ready', () => {
     console.log(`✅ Ouve fila: ${NORMALIZED_SIGNAL_QUEUE}`);

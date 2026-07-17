@@ -76,7 +76,7 @@ async function bootstrap() {
 
   for (const channelId of channelIds) {
     const qName = queueName('analytics', channelId);
-    const worker = new Worker(qName, processAnalyticsJob, { connection, concurrency: 2 });
+    const worker = new Worker(qName, processAnalyticsJob, { connection, concurrency: 2, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
     
     worker.on('ready', () => console.log(`✅ Ouve fila: ${qName}`));
     worker.on('error', err => console.error(`🚨 Erro no worker ${qName}:`, err));
