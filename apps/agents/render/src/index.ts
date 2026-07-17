@@ -84,7 +84,13 @@ async function bootstrap() {
 
   for (const channelId of channelIds) {
     const qName = queueName('render', channelId);
-    const worker = new Worker(qName, processRenderJob, { connection, concurrency: 1 }); // Geralmente render exige concurrency 1
+    const worker = new Worker(qName, processRenderJob, {
+      connection,
+      concurrency: 1, // Render exige concurrency 1 (Chromium + FFmpeg são pesados)
+      lockDuration: 15 * 60 * 1000, // 15 minutos — Remotion pode levar 3-8 min por vídeo
+      removeOnComplete: { count: 1000 },
+      removeOnFail: { count: 5000 },
+    });
     
     worker.on('ready', () => console.log(`✅ Ouve fila: ${qName}`));
     worker.on('error', err => console.error(`🚨 Erro no worker ${qName}:`, err));

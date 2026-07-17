@@ -193,11 +193,18 @@ export async function compositeVideo(
       entryPoint,
     });
 
+    const chromiumPath = process.env.REMOTION_CHROMIUM_PATH || undefined;
+    if (chromiumPath) {
+      console.log(`[Video Compositor] Using Chromium at: ${chromiumPath}`);
+    }
+
     console.log(`[Video Compositor] Retrieving compositions...`);
     const comps = await getCompositions(bundleLocation, {
       inputProps: remotionInputProps,
+      browserExecutable: chromiumPath,
       chromiumOptions: {
         disableWebSecurity: true,
+        gl: 'angle',
       },
     });
 
@@ -217,10 +224,12 @@ export async function compositeVideo(
       codec: 'h264',
       outputLocation: outputVideoPath,
       inputProps: remotionInputProps,
+      browserExecutable: chromiumPath,
       // Se REMOTION_VIDEO_BITRATE está definido, usa VBR com bitrate fixo; caso contrário usa CRF 23
       ...(videoBitrate ? { videoBitrate } : { crf: 23 }),
       chromiumOptions: {
         disableWebSecurity: true,
+        gl: 'angle',
       },
     });
 

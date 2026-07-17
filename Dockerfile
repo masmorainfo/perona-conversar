@@ -4,9 +4,12 @@ FROM node:20-bookworm-slim
 # Set environment variables for Puppeteer and Chromium headless execution
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV REMOTION_CHROMIUM_PATH=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox"
 ENV PORT=3000
 
 # Install Chromium, FFmpeg, native fonts, Python and pip (required for Edge-TTS and Python scrapers)
+# Also installs X11/rendering libs required by Remotion's headless Chromium renderer
 RUN apt-get update && apt-get install -y \
     chromium \
     ffmpeg \
@@ -16,6 +19,21 @@ RUN apt-get update && apt-get install -y \
     fonts-liberation \
     libgbm-dev \
     libasound2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    libx11-xcb1 \
+    libdrm2 \
+    libglib2.0-0 \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatspi2.0-0 \
     python3 \
     python3-pip \
     python-is-python3 \
