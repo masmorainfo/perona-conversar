@@ -56,11 +56,11 @@ async function sanitize() {
     console.log(`✅ Oportunidades experimentais apagadas: ${oppDeleteRes.rowCount}`);
 
     // 3. Remove os outros canais da registry mantendo apenas KAIRO
-    // GARANTIA EXPLÍCITA: O documento do canal KAIRO ("teleserie") é preservado.
+    // GARANTIA EXPLÍCITA: O documento do canal KAIRO ("kairo-futebol") é preservado.
     // O diretório físico "dna/" e o kairo_dna.json não são afetados, pois este script
     // interage exclusivamente com o banco de dados.
     const registryDeleteRes = await pool.query(
-      "DELETE FROM channel_registry WHERE slug != 'teleserie'"
+      "DELETE FROM channel_registry WHERE slug != 'kairo-futebol'"
     );
     console.log(`✅ Canais de teste deletados do registro: ${registryDeleteRes.rowCount}`);
 

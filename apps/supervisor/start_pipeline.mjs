@@ -5,7 +5,7 @@ const pool = new pg.Pool({ connectionString: 'postgres://cos:cos_dev@localhost:5
 const connection = { host: 'localhost', port: 6379 };
 
 // Buscar channel
-const chanRes = await pool.query("SELECT id FROM channel_registry WHERE slug = 'teleserie'");
+const chanRes = await pool.query("SELECT id FROM channel_registry WHERE slug = 'kairo-futebol'");
 const channelId = chanRes.rows[0].id;
 
 const topic = "A Redenção de Kaká: Da cadeira de rodas ao Ballon d'Or";
