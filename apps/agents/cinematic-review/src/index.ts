@@ -32,7 +32,31 @@ const supervisorQueue = new Queue(SUPERVISOR_QUEUE, { connection });
 
 async function processCinematicJob(job: Job<CinematicJobData>) {
   const { contentId, channelId, videoFilePath, script, attemptNumber } = job.data;
-  console.log(`[Cinematic Review Agent] Analisando qualidade cinematográfica do vídeo para unit: ${contentId}`);
+  // Check if this content unit is a VLS experiment (which bypasses editorial rejection to maintain scientific control)
+  const unitRes = await pool.query('SELECT metadata FROM content_units WHERE id = $1', [contentId]);
+  const metadata = unitRes.rows[0]?.metadata || {};
+  const isVls = metadata.isVls || metadata.is_vls_experiment || false;
+
+  if (isVls) {
+    console.log(`[Cinematic Review Agent] 🔬 Unit ${contentId} detectada como experimento VLS. Aprovação automática para manter o controle científico.`);
+    const evaluation: CinematicEvaluation = {
+      approved: true,
+      reasons: [],
+      feedback: 'Aprovado automaticamente como parte do experimento VLS para controle de hipóteses.',
+      suggestions: [],
+      attemptNumber,
+      maxAttempts: 3,
+      evaluatedAt: new Date()
+    };
+    const resultData: CinematicResultData = {
+      contentId,
+      channelId,
+      approved: true,
+      evaluation
+    };
+    await supervisorQueue.add('CINEMATIC_RESULT', resultData);
+    return;
+  }
 
   // Fetch ChannelCore from registry
   const res = await pool.query('SELECT core FROM channel_registry WHERE id = $1', [channelId]);
