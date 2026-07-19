@@ -137,7 +137,12 @@ export class TikTokAdapter implements PlatformAdapter {
       const postRes = await zernio.posts.createPost({
         body: {
           content,
-          mediaUrls: [mediaUrl],
+          mediaItems: [
+            {
+              type: 'video',
+              url: mediaUrl,
+            },
+          ],
           platforms: [
             { platform: 'tiktok' as any, accountId: tiktokAccountId },
           ],
