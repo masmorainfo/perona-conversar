@@ -438,7 +438,7 @@ export const MainVideo: React.FC<MainVideoProps> = ({
   audioContext,
   canonArchetype 
 }) => {
-  const theme = canonArchetype
+  const theme = (canonArchetype && CANON_THEMES[canonArchetype])
     ? CANON_THEMES[canonArchetype]
     : CANON_THEMES['default'];
 
