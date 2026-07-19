@@ -206,6 +206,7 @@ export async function compositeVideo(
         disableWebSecurity: true,
         gl: 'angle',
       },
+      timeoutInMilliseconds: 120000,
     });
 
     const composition = comps.find((c) => c.id === 'MainVideo');
@@ -231,6 +232,7 @@ export async function compositeVideo(
         disableWebSecurity: true,
         gl: 'angle',
       },
+      timeoutInMilliseconds: 120000,
     });
 
     console.log(`[Video Compositor] Remotion render concluído com sucesso!`);
