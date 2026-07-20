@@ -6,7 +6,7 @@ import type { ContentState } from '@cos/types';
 import { getContentState, persistTransition } from './db.js';
 import { queueName } from '@cos/events';
 import { createActor } from 'xstate';
-import { notify, editTelegramMessage } from '@cos/notifications';
+import { notify, editTelegramMessage, editTelegramCaption } from '@cos/notifications';
 import path from 'path';
 
 // Map of outgoing queues used to dispatch next steps
@@ -637,6 +637,12 @@ async function tryEditTelegramMessage(
     linksText
   ].filter(Boolean).join('\n');
 
-  const res = await editTelegramMessage(telegramMessageId, updatedText, telegramConfig, 'Markdown');
+  const isVideo = !!metadata.telegramIsVideo;
+  let res;
+  if (isVideo) {
+    res = await editTelegramCaption(telegramMessageId, updatedText, telegramConfig, 'Markdown');
+  } else {
+    res = await editTelegramMessage(telegramMessageId, updatedText, telegramConfig, 'Markdown');
+  }
   return res.ok;
 }
