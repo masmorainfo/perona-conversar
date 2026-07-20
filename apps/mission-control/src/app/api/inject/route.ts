@@ -4,7 +4,18 @@ import { SUPERVISOR_QUEUE } from '@cos/events';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const arrayBuffer = await request.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    // Auto-detect UTF-8 vs Windows-1252 to support unconfigured Windows PowerShell clients
+    let bodyString = buffer.toString('utf8');
+    const reencoded = Buffer.from(bodyString, 'utf8');
+    if (!buffer.equals(reencoded)) {
+      const decoder = new TextDecoder('windows-1252');
+      bodyString = decoder.decode(buffer);
+    }
+    
+    const body = JSON.parse(bodyString);
     const { channelId, topic } = body;
 
     if (!channelId || !topic) {
