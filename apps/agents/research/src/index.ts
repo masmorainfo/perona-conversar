@@ -35,11 +35,14 @@ async function processResearchJob(job: Job<ResearchJobData>) {
 
   try {
     let searchResults: any = null;
-    const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+    let tavilyFailReason: string | null = null;
+    let braveFailReason: string | null = null;
 
+    // 1. Try Tavily (primária — busca avançada + resumo pronto)
+    const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
     if (TAVILY_API_KEY) {
       try {
-        console.log(`[Research Agent] Tavily API encontrada. Efetuando busca real na internet...`);
+        console.log(`[Research Agent] 🔎 Tentando Tavily (search_depth=advanced)...`);
         const searchResponse = await fetch('https://api.tavily.com/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -51,34 +54,117 @@ async function processResearchJob(job: Job<ResearchJobData>) {
             max_results: 5,
           }),
         });
-        if (searchResponse.ok) {
-          searchResults = await searchResponse.json();
-          console.log(`[Research Agent] Busca no Tavily concluída com sucesso!`);
-        } else {
-          console.error(`[Research Agent] Falha na chamada da API Tavily: Status ${searchResponse.status}`);
+
+        if (!searchResponse.ok) {
+          const errorBody = await searchResponse.text().catch(() => '');
+          throw new Error(`Tavily API ${searchResponse.status}: ${errorBody.slice(0, 200)}`);
         }
-      } catch (searchError) {
-        console.error(`[Research Agent] Erro ao conectar com a API Tavily:`, searchError);
+
+        const data = await searchResponse.json() as any;
+        if (data?.results?.length > 0) {
+          searchResults = data;
+          console.log(`[Research Agent] ✅ Tavily concluída (${data.results.length} resultados)`);
+        } else {
+          tavilyFailReason = 'respondeu OK mas retornou 0 resultados';
+          console.warn(`[Research Agent] Tavily ${tavilyFailReason} para "${topic}"`);
+        }
+      } catch (err: any) {
+        tavilyFailReason = err?.message ?? String(err);
+        console.error('[Research Agent] Tavily Error, falling back to Brave Search:', err);
+      }
+    } else {
+      tavilyFailReason = 'TAVILY_API_KEY não configurada';
+      console.warn(`[Research Agent] ${tavilyFailReason}, tentando Brave Search direto...`);
+    }
+
+    // 2. Try Brave Search (fallback — normalizado pro mesmo formato do Tavily)
+    if (!searchResults) {
+      const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
+      if (BRAVE_API_KEY) {
+        try {
+          console.log(`[Research Agent] 🔎 Tentando Brave Search (fallback)...`);
+          const braveResponse = await fetch(
+            `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(topic)}&count=5`,
+            {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'Accept-Encoding': 'gzip',
+                'X-Subscription-Token': BRAVE_API_KEY,
+              },
+            }
+          );
+
+          if (!braveResponse.ok) {
+            const errorBody = await braveResponse.text().catch(() => '');
+            throw new Error(`Brave API ${braveResponse.status}: ${errorBody.slice(0, 200)}`);
+          }
+
+          const braveData = await braveResponse.json() as any;
+          const braveWebResults = braveData?.web?.results ?? [];
+
+          if (braveWebResults.length > 0) {
+            // Normaliza pro mesmo shape do Tavily, pra que o prompt do LLM
+            // abaixo funcione idêntico independente da fonte
+            searchResults = {
+              answer: '', // Brave não gera resumo pronto como o Tavily
+              results: braveWebResults.map((r: any) => ({
+                title: r.title ?? '',
+                url: r.url ?? '',
+                content: r.description ?? '',
+              })),
+            };
+            console.log(`[Research Agent] ✅ Brave Search concluída (${braveWebResults.length} resultados)`);
+          } else {
+            braveFailReason = 'respondeu OK mas retornou 0 resultados';
+            console.warn(`[Research Agent] Brave Search ${braveFailReason} para "${topic}"`);
+          }
+        } catch (err: any) {
+          braveFailReason = err?.message ?? String(err);
+          console.error('[Research Agent] Brave Search Error:', err);
+        }
+      } else {
+        braveFailReason = 'BRAVE_API_KEY não configurada';
+        console.warn(`[Research Agent] ${braveFailReason}`);
       }
     }
 
-    const prompt = `
-      Faça uma pesquisa detalhada sobre o tópico: "${topic}".
-      Direção editorial desejada: "${editorialDirection || 'Neutro'}".
-      
-      ${searchResults ? `Aqui estão os resultados reais encontrados na internet para referência:\n${JSON.stringify(searchResults.results, null, 2)}\nResumo gerado pela pesquisa: ${searchResults.answer || ''}` : ''}
-      
-      Extraia fatos importantes, estatísticas e um resumo.
-      Responda APENAS com um objeto JSON no formato:
-      {
-        "summary": "Resumo geral do tópico",
-        "facts": ["fato 1", "fato 2", "fato 3"],
-        "sources": [{"title": "Nome da fonte", "url": "url"}]
-      }
-    `;
+    let result = { summary: '', facts: [], sources: [] };
 
-    const responseJsonStr = await llm.complete(prompt, { task: 'observer', jsonMode: true, temperature: 0.3 });
-    const result = JSON.parse(responseJsonStr);
+    // 3. Ambas falharam → comportamento honesto (nunca inventa nada)
+    if (!searchResults || !searchResults.results || searchResults.results.length === 0) {
+      console.warn(
+        `[Research Agent] ⚠️ Nenhum resultado real para "${topic}" após tentar AMBAS as fontes. ` +
+        `Tavily: ${tavilyFailReason ?? 'não tentada'}. ` +
+        `Brave: ${braveFailReason ?? 'não tentada'}. ` +
+        `Retornando vazio honestamente.`
+      );
+      result = {
+        summary: `Nenhum fato encontrado para o tópico: ${topic}.`,
+        facts: [],
+        sources: []
+      };
+    } else {
+      const prompt = `
+        Faça uma pesquisa detalhada sobre o tópico: "${topic}".
+        Direção editorial desejada: "${editorialDirection || 'Neutro'}".
+        
+        Aqui estão os resultados reais encontrados na internet para referência:
+        ${JSON.stringify(searchResults.results, null, 2)}
+        Resumo gerado pela pesquisa: ${searchResults.answer || ''}
+        
+        Extraia fatos importantes, estatísticas e um resumo baseando-se EXCLUSIVAMENTE nestes resultados reais. Não invente nenhuma informação.
+        Responda APENAS com um objeto JSON no formato:
+        {
+          "summary": "Resumo geral do tópico baseado nos resultados",
+          "facts": ["fato 1", "fato 2", "fato 3"],
+          "sources": [{"title": "Nome da fonte", "url": "url"}]
+        }
+      `;
+
+      const responseJsonStr = await llm.complete(prompt, { task: 'observer', jsonMode: true, temperature: 0.3 });
+      result = JSON.parse(responseJsonStr);
+    }
 
     const researchPackage: ResearchPackage = {
       topic,
