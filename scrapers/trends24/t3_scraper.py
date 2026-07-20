@@ -7,6 +7,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
 from bs4 import BeautifulSoup
 import time
+import os
 import re
 from collections import defaultdict
 
@@ -34,8 +35,12 @@ options.add_argument("--window-size=1920,1080")  # Set a window size for renderi
 options.add_argument("--disable-dev-shm-usage")  # Address resource limits in containers
 
 # Set up Selenium WebDriver with Service
-driver_path = ChromeDriverManager().install()
-service = Service(driver_path)
+chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
+if chromedriver_path:
+    service = Service(chromedriver_path)
+else:
+    driver_path = ChromeDriverManager().install()
+    service = Service(driver_path)
 
 if HEADLESS_MODE:
     driver = webdriver.Chrome(service=service, options=options) # Headless mode

@@ -161,162 +161,53 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
       }
       if (options?.task === 'editorial' || prompt.includes('Diretor Editorial') || prompt.includes('Diretor de Conteúdo') || prompt.includes('Inteligência Editorial')) {
-        const isBaggio = prompt.includes('Baggio') || prompt.includes('1994') || prompt.includes('Pasadena') || prompt.includes('baggio');
-        const isZidane = prompt.includes('Zidane') || prompt.includes('2006') || prompt.includes('Berlim') || prompt.includes('Queda') || prompt.includes('zidane');
-        
         return JSON.stringify({
           approved: true,
           score: 0.85,
-          canonArchetype: (isBaggio || isZidane) ? 'heroi_tragico' : null,
-          canonTargetEmotion: (isBaggio || isZidane) ? 'Culpa + Grandeza' : null,
-          direction: (isBaggio || isZidane) ? 'focar na nobreza trágica do erro sob pressão' : 'focar nos aspectos práticos de engenharia e impacto real do tema.',
+          canonArchetype: 'heroi_tragico',
+          canonTargetEmotion: 'Culpa + Grandeza',
+          direction: 'focar nos aspectos práticos de engenharia e impacto real do tema.',
           reason: 'O tema possui forte apelo emocional e arquetípico do futebol, alinhado à KAIRO.'
         });
       }
       if (prompt.includes('pesquisa detalhada') || prompt.includes('Pesquisador') || prompt.includes('pesquise sobre') || prompt.includes('pesquisa sobre')) {
-        const isZidane = prompt.includes('Zidane') || prompt.includes('2006') || prompt.includes('Berlim') || prompt.includes('Queda');
-        const isBaggio = prompt.includes('Baggio') || prompt.includes('1994') || prompt.includes('Pasadena');
-        const isRonaldo = prompt.includes('Ronaldo') || prompt.includes('2002') || prompt.includes('Yokohama');
-        const isAdriano = prompt.includes('Adriano') || prompt.includes('2004') || prompt.includes('Imperador');
-
-        let summary = 'Este é um resumo gerado automaticamente sobre o tema solicitado, abordando as principais inovações.';
+        let summary = 'Este é um resumo gerado automaticamente sobre o tema solicitado, abordando as principais informações encontradas.';
         let facts = [
-          'Fato 1: O desenvolvimento teve um aumento de 50% na adoção prática recente.',
-          'Fato 2: Estudos de caso demonstram eficiência aprimorada em mais de 30%.',
-          'Fato 3: Há uma tendência de consolidação no mercado.'
+          'Fato 1: O tema teve um aumento significativo de relevância recente.',
+          'Fato 2: Estudos de caso demonstram eficiência aprimorada em contextos práticos.',
+          'Fato 3: Há uma tendência de consolidação neste aspecto.'
         ];
         let sources = [
           { title: 'Report', url: 'https://example.com' }
         ];
 
-        if (isZidane) {
-          summary = 'Análise dramática da final da Copa do Mundo de 2006. O craque Zinedine Zidane encerra sua brilhante carreira de forma trágica com uma expulsão após cabeçada em Materazzi, deixando a França desfalcada.';
-          facts = [
-            'Fato 1: Zidane abriu o placar na final com um pênalti de cavadinha antológico.',
-            'Fato 2: A provocação de Materazzi resultou na cabeçada aos 110 minutos de jogo.',
-            'Fato 3: A Itália conquistou o título nos pênaltis após o empate de 1 a 1.'
-          ];
-          sources = [
-            { title: 'FIFA World Cup Archives 2006', url: 'https://fifa.com/archives' },
-            { title: 'L\'Équipe Retrospective', url: 'https://lequipe.fr' }
-          ];
-        } else if (isBaggio) {
-          summary = 'A tragédia e solidão silenciosa de Roberto Baggio após desperdiçar o pênalti decisivo na final da Copa do Mundo de 1994 em Pasadena contra o Brasil, marcando sua carreira para sempre.';
-          facts = [
-            'Fato 1: Baggio carregou a Itália nas costas durante o mata-mata com 5 gols fundamentais.',
-            'Fato 2: O pênalti perdido selou o tetracampeonato mundial da Seleção Brasileira.',
-            'Fato 3: A imagem de Baggio estático com a cabeça baixa tornou-se o maior retrato da dor no futebol.'
-          ];
-          sources = [
-            { title: 'La Gazzetta dello Sport Retrospective', url: 'https://gazzetta.it' },
-            { title: 'Copa 94 Pasadena Archives', url: 'https://fifa.com/archives-1994' }
-          ];
-        } else if (isRonaldo) {
-          summary = 'O milagre e a redenção histórica de Ronaldo Fenômeno na Copa do Mundo de 2002 em Yokohama, superando lesões devastadoras no joelho para dar o pentacampeonato ao Brasil.';
-          facts = [
-            'Fato 1: Ronaldo passou por duas cirurgias gravíssimas no joelho que quase encerraram sua carreira.',
-            'Fato 2: Marcou 8 gols no torneio, incluindo os dois gols da final contra a Alemanha.',
-            'Fato 3: A superação de Ronaldo é considerada a maior volta por cima da história do esporte.'
-          ];
-          sources = [
-            { title: 'Placar Especial Penta', url: 'https://placar.com.br' },
-            { title: 'FIFA World Cup 2002 Highlights', url: 'https://fifa.com/archives-2002' }
-          ];
-        } else if (isAdriano) {
-          summary = 'A fantástica e emocionante redenção de Adriano Imperador na final da Copa América de 2004 contra a Argentina, marcando o gol de empate aos 93 minutos de jogo.';
-          facts = [
-            'Fato 1: A Argentina vencia por 2 a 1 até o último minuto dos acréscimos.',
-            'Fato 2: Adriano acertou um voleio espetacular aos 93 minutos para empatar o jogo.',
-            'Fato 3: O Brasil venceu a disputa nos pênaltis, consagrando Adriano como o herói e artilheiro.'
-          ];
-          sources = [
-            { title: 'Copa América 2004 Archives', url: 'https://conmebol.com' },
-            { title: 'Globo Esporte Retrospective', url: 'https://ge.globo.com' }
-          ];
-        }
-
         return JSON.stringify({ summary, facts, sources });
       }
       if (options?.task === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
-        const isZidane = prompt.includes('Zidane') || prompt.includes('2006');
-        const isBaggio = prompt.includes('Baggio') || prompt.includes('1994') || prompt.includes('Pasadena') || prompt.includes('baggio');
-        
-        const title = isZidane 
-          ? 'O Silêncio de Berlim: A Queda Trágica de Zidane' 
-          : (isBaggio ? 'Roberto Baggio: A nobreza trágica do erro em 1994' : 'A Nova Era Tecnológica');
-          
-        const hook = isZidane 
-          ? 'Em dois mil e seis, o world inteiro parou para assistir ao último ato de um gênio sob o céu de Berlim.'
-          : (isBaggio 
-            ? 'A tragédia e a solidão silenciosa de Roberto Baggio após isolar o pênalti decisivo em 1994. Uma dor profunda na alma.'
-            : 'Você não vai querer ficar de fora do que está acontecendo agora!');
-
-        const body = isZidane ? [
-          {
-            content: 'Zinedine Zidane era a elegância pura, o maestro que conduzia a França rumo à glória eterna mais uma vez.',
-            durationSeconds: 25,
-            visualNote: 'Cena lenta, Zidane caminhando pelo campo com luz âmbar e poeira suspensa'
-          },
-          {
-            content: 'Mas o destino, esse roteirista implacável, reserva tragédias aos que tentam tocar a coroa dos deuses. Um instante de fúria, e o silêncio caiu sobre Berlim.',
-            durationSeconds: 30,
-            visualNote: 'Zidane passando de cabeça baixa pela taça da Copa do Mundo, em tons de azul-frio e monochrome'
-          },
-          {
-            content: 'A glória se desfez em cinzas sob os pés do herói exilado. Zidane saiu de campo sozinho, deixando o templo do futebol sem seu deus.',
-            durationSeconds: 25,
-            visualNote: 'Cena de encerramento vazia com foco na taça estática, tons escuros'
-          }
-        ] : (isBaggio ? [
-          {
-            content: 'Baggio carregou a Itália nas costas durante a Copa, mas o pênalti perdido selou a derrota. Uma imagem eterna.',
-            durationSeconds: 25,
-            visualNote: 'Baggio estático em preto e branco com película clássica. Solene slow piano tocando ao fundo.'
-          },
-          {
-            content: 'O silêncio trágico de Pasadena cobriu o craque. O erro que definiu uma carreira de grandeza e sofrimento.',
-            durationSeconds: 30,
-            visualNote: 'Corte lento de câmera mostrando a dor silenciosa no olhar do jogador em preto e branco.'
-          },
-          {
-            content: 'A redenção nunca veio sob o sol quente da Califórnia, restando apenas a nobreza trágica do herói caído.',
-            durationSeconds: 25,
-            visualNote: 'Cena final de Baggio caminhando sob luz quente de pôr do sol.'
-          }
-        ] : [
-          {
-            content: 'Primeiro, vamos olhar para o panorama prático do desenvolvimento.',
-            durationSeconds: 30,
-            visualNote: 'Apresentação de tela com código'
-          },
-          {
-            content: 'Em seguida, analisamos a eficiência obtida no dia a dia com automação.',
-            durationSeconds: 30,
-            visualNote: 'Gráfico de performance subindo'
-          },
-          {
-            content: 'Por fim, o impacto imediato no mercado de trabalho.',
-            durationSeconds: 20,
-            visualNote: 'Equipe de engenheiros colaborando'
-          }
-        ]);
-
-        const keywords = (isZidane || isBaggio)
-          ? ['futebol', 'copadomundo', isZidane ? 'zidane' : 'baggio', 'kairo']
-          : ['tecnologia', 'inovacao', 'futuro', 'ia'];
-
         return JSON.stringify({
-          title,
-          hook,
-          body,
-          cta: 'Qual o maior drama que você já viu no futebol? Deixe seu comentário.',
-          estimatedDurationSeconds: body.reduce((acc, s) => acc + s.durationSeconds, 0),
-          description: isZidane 
-            ? 'A história dramática do último jogo de Zinedine Zidane na final da Copa do Mundo de 2006.' 
-            : (isBaggio 
-              ? 'A tragédia e a solidão silenciosa de Roberto Baggio na Copa do Mundo de 1994.'
-              : 'Uma análise profunda sobre como a tecnologia está transformando o cenário atual.'),
-          keywords
+          title: "Análise dos Fatos Históricos",
+          hook: "Uma história surpreendente sobre este acontecimento que você precisa conhecer.",
+          body: [
+            {
+              content: 'A primeira análise revela detalhes profundos sobre como os eventos se desenrolaram.',
+              durationSeconds: 30,
+              visualNote: 'Cena impactante e misteriosa do evento'
+            },
+            {
+              content: 'Depois do momento de glória, as consequências moldaram as perspectivas futuras para sempre.',
+              durationSeconds: 30,
+              visualNote: 'Corte dramático mostrando o clímax'
+            },
+            {
+              content: 'Hoje o legado se mantém vivo através do que podemos observar de seus resultados duradouros.',
+              durationSeconds: 20,
+              visualNote: 'Encerramento reflexivo e calmo'
+            }
+          ],
+          cta: 'Como esses fatos mudaram a sua perspectiva?',
+          estimatedDurationSeconds: 80,
+          description: "Uma análise profunda e emocional sobre o impacto real dos acontecimentos.",
+          keywords: ['fatos', 'analise', 'impacto', 'historia']
         });
       }
       // KDR — KAIRO Deep Research (Cinematic Genome Library proposals)
@@ -351,35 +242,14 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
       }
       if (options?.task === 'humanizer' || prompt.includes('Humanizer') || prompt.includes('humanizar')) {
-        const isZidane = prompt.includes('Zidane') || prompt.includes('Berlim');
-        const isBaggio = prompt.includes('Baggio') || prompt.includes('Pasadena') || prompt.includes('baggio');
-        
-        const hook = isZidane 
-          ? 'Em dois mil e seis, o mundo inteiro parou pra ver o último ato de um gênio sob o céu de Berlim.'
-          : (isBaggio 
-            ? 'A tragédia e a solidão silenciosa de Roberto Baggio depois de isolar o pênalti de 94. Aquilo doeu fundo na alma.'
-            : 'Você não vai querer ficar de fora do que tá acontecendo agora, né?');
-        
-        const sections = isZidane ? [
-          'Zinedine Zidane era a elegância pura, o maestro que conduzia a França rumo à glória eterna mais uma vez.',
-          'Mas o destino reserva tragédias pesadas aos que tentam tocar a coroa dos deuses. Um segundo de fúria, e o silêncio caiu de vez sobre Berlim.',
-          'A glória se desfez em cinzas sob os pés do herói exilado. Zidane saiu de campo sozinho, deixando o templo do futebol.'
-        ] : (isBaggio ? [
-          'Baggio carregou a Itália nas costas na Copa, mas perder aquele pênalti acabou com tudo. Que cena dolorida.',
-          'O silêncio total lá em Pasadena caiu sobre ele. Um lance que acabou marcando uma trajetória brilhante e sofrida.',
-          'Sob o sol de fritar da Califórnia, não teve final feliz. Só restou a dignidade dolorosa de um gigante que caiu.'
-        ] : [
-          'Primeiro, vamo olhar bem pra esse panorama de um jeito super prático.',
-          'Depois, a gente analisa a eficiência que tá rolando de verdade no dia a dia.',
-          'E pra fechar, vamo ver o impacto disso tudo no nosso futuro imediato.'
-        ]);
-
         return JSON.stringify({
-          hook,
-          sections,
-          cta: isBaggio 
-            ? 'E pra você, qual foi o maior drama que o futebol já produziu? Comenta aí embaixo.'
-            : 'Qual o maior drama que você já viu no futebol? Deixe seu comentário.'
+          hook: "Uma história surpreendente que vai prender sua atenção até o fim.",
+          sections: [
+            "Logo de cara, a gente percebe como as coisas foram muito intensas e dramáticas.",
+            "E não parou por aí, o momento central foi cheio de reviravoltas que ninguém esperava.",
+            "No fim das contas, a consequência de tudo isso deixou uma marca profunda e inesquecível."
+          ],
+          cta: "Qual sua parte favorita dessa história?"
         });
       }
       if (prompt.toLowerCase().includes('crítico') || prompt.toLowerCase().includes('critic') || prompt.toLowerCase().includes('avali')) {

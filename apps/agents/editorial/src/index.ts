@@ -94,6 +94,9 @@ async function processEditorialJob(job: Job<EditorialJobData>) {
     • Se NÃO, inclua "clpOverrides" com a correção editorial.
     Estratégias disponíveis: KEEP | TRANSLATE | ADAPT | EXPLAIN | REMOVE
     ─────────────────────────────────────────────────────────────────────────────
+
+    ASSUMA QUE O EVENTO OU TEMA É REAL E CONFIRMADO. Sua função não é verificar fatos, mas julgar estritamente a qualidade da história. Avalie o tema apenas por sua adequação ao CANON KAIRO e à exploração da condição humana. Deixe a verificação factual para a próxima etapa do pipeline.
+
     
     Responda APENAS com um objeto JSON válido:
     {

@@ -102,6 +102,9 @@ export async function notify(
           { text: 'ℹ️ Detalhes', callback_data: `details:${payload.contentId}` },
           { text: '❌ Rejeitar', callback_data: `reject:${payload.contentId}` },
         ],
+        [
+          { text: '🎬 Próxima História', callback_data: 'next_story' }
+        ],
       ],
     };
 

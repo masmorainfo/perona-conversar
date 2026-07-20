@@ -163,8 +163,8 @@ export class TikTokAdapter implements PlatformAdapter {
       const postId = postData?.post?._id || postData?._id || 'unknown';
       const tiktokUsername = postData?.post?.platforms?.[0]?.platformSpecificData?.tiktokUsername;
       const platformUrl = tiktokUsername
-        ? `https://tiktok.com/@${tiktokUsername}`
-        : `https://tiktok.com/video/${postId}`;
+        ? `https://tiktok.com/@${tiktokUsername}?zernio_post_id=${postId}`
+        : `https://tiktok.com/video/${postId}?zernio_post_id=${postId}`;
 
       console.log(`[TikTokAdapter] ✅ Publicação concluída (postId: ${postId})`);
 

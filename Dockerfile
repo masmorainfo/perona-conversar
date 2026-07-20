@@ -6,12 +6,14 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV REMOTION_CHROMIUM_PATH=/usr/bin/chromium
 ENV CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox"
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 ENV PORT=3000
 
 # Install Chromium, FFmpeg, native fonts, Python and pip (required for Edge-TTS and Python scrapers)
 # Also installs X11/rendering libs required by Remotion's headless Chromium renderer
 RUN apt-get update && apt-get install -y \
     chromium \
+    chromium-driver \
     ffmpeg \
     fonts-freefont-ttf \
     fonts-noto-color-emoji \

@@ -295,6 +295,14 @@ async function pollTelegram(): Promise<void> {
           const hookLine = hook ? `_${escapeMarkdown(hook.slice(0, 120))}_` : null;
 
           // Transita o estado oficialmente chamando o eventHandler
+          const nextMarkup = {
+            inline_keyboard: [
+              [
+                { text: '🎬 Próxima História', callback_data: 'next_story' }
+              ]
+            ]
+          };
+
           if (action === 'approve') {
             await processEvent(pool, 'REVIEW_RESULT', { contentId, channelId, action: 'approve' });
             await answerCallbackQuery(cbQuery.id, telegramConfig, '\u2705 Vídeo aprovado para publicação!');
@@ -307,17 +315,17 @@ async function pollTelegram(): Promise<void> {
               ``,
               durationText ? `\u23f1 ${durationText} \u00b7 \ud83d\udcfa ${channelSlug}` : `\ud83d\udcfa ${channelSlug}`,
               ``,
-              `\ud83d\udfe2 Aprovado \u2014 aguardando publica\u00e7\u00e3o`,
+              `\ud83d\udfe2 Aprovado \u2014 aguardando publicação`,
             ].filter((x): x is string => x !== null).join('\n');
 
-            await editMsg(updatedText);
+            await editMsg(updatedText, nextMarkup);
 
           } else if (action === 'adjust') {
             await processEvent(pool, 'REVIEW_RESULT', { contentId, channelId, action: 'regenerate' });
             await answerCallbackQuery(cbQuery.id, telegramConfig, '\ud83d\udfe1 Ajustes solicitados!');
 
             const updatedText = [
-              `*KAIRO // EM REVIS\u00c3O*`,
+              `*KAIRO // EM REVISÃO*`,
               ``,
               `"${escapeMarkdown(topic)}"`,
               hookLine,
@@ -327,7 +335,7 @@ async function pollTelegram(): Promise<void> {
               `\ud83d\udfe1 Ajustes solicitados \u2014 retornando ao pipeline`,
             ].filter((x): x is string => x !== null).join('\n');
 
-            await editMsg(updatedText);
+            await editMsg(updatedText, nextMarkup);
 
           } else if (action === 'reject') {
             // Mostra o submenu de motivos de descarte editando a mesma mensagem
@@ -511,10 +519,17 @@ async function pollTelegram(): Promise<void> {
           ].filter((x): x is string => x !== null).join('\n');
 
           if (messageId) {
+            const nextMarkup = {
+              inline_keyboard: [
+                [
+                  { text: '🎬 Próxima História', callback_data: 'next_story' }
+                ]
+              ]
+            };
             if (isVideo) {
-              await editTelegramCaption(messageId, updatedText, telegramConfig, 'Markdown');
+              await editTelegramCaption(messageId, updatedText, telegramConfig, 'Markdown', nextMarkup);
             } else {
-              await editTelegramMessage(messageId, updatedText, telegramConfig, 'Markdown');
+              await editTelegramMessage(messageId, updatedText, telegramConfig, 'Markdown', nextMarkup);
             }
           }
 
@@ -870,6 +885,17 @@ async function pollTelegram(): Promise<void> {
         } catch (err) {
           console.error('[Supervisor] Erro kdr_reject:', err);
           await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao rejeitar.', true);
+        }
+      }
+      
+      // ── Próxima História ──────────────────────────────────────────────────────
+      else if (data === 'next_story') {
+        try {
+          await startNextHistory();
+          await answerCallbackQuery(cbQuery.id, telegramConfig, '🎬 Buscando próxima história...');
+        } catch (err) {
+          console.error('[Supervisor] Erro ao iniciar próxima história via callback:', err);
+          await answerCallbackQuery(cbQuery.id, telegramConfig, '🚨 Erro ao iniciar próxima história.', true);
         }
       }
       

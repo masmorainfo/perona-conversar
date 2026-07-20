@@ -160,6 +160,10 @@ async function processScriptJob(job: Job<ScriptJobData>) {
   const { contentId, channelId, researchPackage, previousScript, criticFeedback, attemptNumber } = job.data;
   console.log(`[Script Agent] Escrevendo script para: "${researchPackage.topic}" (Tentativa: ${attemptNumber})`);
 
+  if (!researchPackage.keyFacts || researchPackage.keyFacts.length === 0) {
+    throw new Error(`[Script Agent] Abortando geração de roteiro para "${researchPackage.topic}": o pacote de pesquisa não contém fatos válidos (0 facts). O agente não deve inventar ou usar fallbacks.`);
+  }
+
   // Fetch ChannelCore from registry
   const res = await pool.query('SELECT core FROM channel_registry WHERE id = $1', [channelId]);
   if (res.rowCount === 0) {
@@ -200,7 +204,7 @@ async function processScriptJob(job: Job<ScriptJobData>) {
       ],
       "cta": "Reflexão final ou pergunta retórica — NUNCA um pedido de like, inscrição, compartilhamento ou comentário (Canon: KAIRO não pede, KAIRO entrega)",
       "estimatedDurationSeconds": 90,
-      "keywords": ["exatamente 4 hashtags relevantes para o TikTok, sem o caractere #, ex: futebol, copa, baggio, kairo"]
+      "keywords": ["exatamente 4 hashtags relevantes para o TikTok, sem o caractere #, ex: futebol, copa, historia, kairo"]
     }
     
     REGRA INVIOLÁVEL — CANON: "KAIRO não pede, KAIRO entrega."
