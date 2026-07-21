@@ -20,8 +20,8 @@ const OPENAI_DEFAULT_EMBED_MODEL = 'text-embedding-3-small';
 export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider {
   private openai?: OpenAI;
   private anthropic?: Anthropic;
-  private readonly isNvidia: boolean;
-  private readonly isAnthropic: boolean;
+  private isNvidia: boolean;
+  private isAnthropic: boolean;
 
   constructor(apiKey?: string, baseURL?: string) {
     const forceMock = process.env.FORCE_MOCK_LLM === 'true';
@@ -31,51 +31,53 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
     this.isAnthropic = provider === 'anthropic' || (!provider && !!process.env.ANTHROPIC_API_KEY);
 
     if (this.isAnthropic) {
-      this.isNvidia = false;
       const anthropicKey = forceMock ? undefined : (process.env.ANTHROPIC_API_KEY);
       if (anthropicKey && anthropicKey.trim() !== '') {
         this.anthropic = new Anthropic({ apiKey: anthropicKey, timeout: 120000 });
-        console.log(`[LLM] Modo: 🟣 Anthropic Claude | Modelo padrão: ${ANTHROPIC_DEFAULT_MODEL}`);
+        console.log(`[LLM] Modo Primário: 🟣 Anthropic Claude | Modelo padrão: ${ANTHROPIC_DEFAULT_MODEL}`);
       } else {
         console.warn('⚠️ OpenAIProvider running in MOCK mode (no Anthropic API key)');
       }
+    }
+
+    if (provider === 'nvidia' || (this.isAnthropic && !!process.env.NVIDIA_API_KEY)) {
+      this.isNvidia = true;
+    } else if (provider === 'openai') {
+      this.isNvidia = false;
     } else {
-      if (provider === 'nvidia') {
-        this.isNvidia = true;
-      } else if (provider === 'openai') {
-        this.isNvidia = false;
-      } else {
-        this.isNvidia = !!process.env.NVIDIA_API_KEY && !process.env.OPENAI_API_KEY;
-      }
+      this.isNvidia = !!process.env.NVIDIA_API_KEY && !process.env.OPENAI_API_KEY;
+    }
 
-      const key = forceMock ? undefined : (apiKey
-        || (this.isNvidia ? process.env.NVIDIA_API_KEY : undefined)
-        || process.env.OPENAI_API_KEY
-        || process.env.NVIDIA_API_KEY);
+    const openAiKey = forceMock ? undefined : (apiKey
+      || (this.isNvidia ? process.env.NVIDIA_API_KEY : undefined)
+      || process.env.OPENAI_API_KEY
+      || process.env.NVIDIA_API_KEY);
 
-      const defaultBaseURL = this.isNvidia
-        ? 'https://integrate.api.nvidia.com/v1'
-        : process.env.OPENAI_BASE_URL;
+    const defaultBaseURL = this.isNvidia
+      ? 'https://integrate.api.nvidia.com/v1'
+      : process.env.OPENAI_BASE_URL;
 
-      const url = baseURL || defaultBaseURL;
+    const url = baseURL || defaultBaseURL;
 
-      if (key && key.trim() !== '') {
-        const isTest = process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true';
-        const config: any = { 
-          apiKey: key, 
-          timeout: isTest ? 5000 : 120000, 
-          maxRetries: isTest ? 0 : 1 
-        };
-        if (url) config.baseURL = url;
-        this.openai = new OpenAI(config);
-        console.log(`[LLM] Modo: ${this.isNvidia ? '🟢 NVIDIA NIM' : '🔵 OpenAI'} | Modelo padrão: ${this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL}`);
-      } else {
-        console.warn('⚠️ OpenAIProvider running in MOCK mode (no API key provided)');
-      }
+    if (openAiKey && openAiKey.trim() !== '') {
+      const isTest = process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true';
+      const config: any = { 
+        apiKey: openAiKey, 
+        timeout: isTest ? 5000 : 120000, 
+        maxRetries: isTest ? 0 : 1 
+      };
+      if (url) config.baseURL = url;
+      this.openai = new OpenAI(config);
+      console.log(`[LLM] Modo ${this.isAnthropic ? 'Secundário' : 'Primário'}: ${this.isNvidia ? '🟢 NVIDIA NIM' : '🔵 OpenAI'} | Modelo padrão: ${this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL}`);
+    } else if (!this.isAnthropic) {
+      console.warn('⚠️ OpenAIProvider running in MOCK mode (no API key provided)');
     }
   }
 
   async complete(prompt: string, options?: CompletionOptions): Promise<string> {
+    let anthropicFailed = false;
+    let anthropicErrorMsg = '';
+
     // ─── Anthropic path ─────────────────────────────────────────────────
     if (this.anthropic) {
       const model = options?.model || ANTHROPIC_DEFAULT_MODEL;
@@ -116,10 +118,9 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         } catch (err: any) {
           const isLastAttempt = attempt === maxRetries;
           if (isLastAttempt) {
-            console.error(`[LLM] Erro Anthropic FINAL (modelo: ${model}, ${maxRetries} tentativas esgotadas), falling back to mock:`, err?.message || err);
-            if ((options?.task as any) === 'script') {
-              throw new Error(`[LLM] Erro crítico na geração de roteiro pelo LLM (Anthropic): ${err?.message || err}`);
-            }
+            console.error(`[LLM] Erro Anthropic FINAL (modelo: ${model}, ${maxRetries} tentativas esgotadas):`, err?.message || err);
+            anthropicFailed = true;
+            anthropicErrorMsg = err?.message || err;
           } else {
             const backoffMs = attempt * 3000; // 3s, 6s
             console.warn(`[LLM] Erro Anthropic tentativa ${attempt}/${maxRetries} (modelo: ${model}): ${err?.message || err}. Retrying in ${backoffMs}ms...`);
@@ -130,7 +131,11 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
     }
 
     // ─── OpenAI / NVIDIA path ───────────────────────────────────────────
-    if (this.openai) {
+    if (this.openai && (!this.anthropic || anthropicFailed)) {
+      if (anthropicFailed) {
+        console.log(`[LLM] Fazendo fallback para ${this.isNvidia ? 'NVIDIA' : 'OpenAI'} após falha do Anthropic...`);
+      }
+      
       const defaultModel = this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL;
       const routedModel = (this.isNvidia && options?.task)
         ? NVIDIA_TASK_MODELS[options.task]
@@ -147,18 +152,17 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
         return response.choices[0]?.message?.content || '';
       } catch (err: any) {
-        console.error(`[LLM] Erro (modelo: ${model}), falling back to mock:`, err);
-        if ((options?.task as any) === 'script') {
-          throw new Error(`[LLM] Erro crítico na geração de roteiro pelo LLM (OpenAI): ${err?.message || err}`);
+        console.error(`[LLM] Erro ${this.isNvidia ? 'NVIDIA' : 'OpenAI'} (modelo: ${model}), falling back to mock:`, err);
+        if ((options?.task as any) === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
+          throw new Error(`[LLM] Erro crítico na geração de roteiro pelo LLM: ${err?.message || err} | Anthropic error: ${anthropicErrorMsg}`);
         }
       }
     }
 
-
     // Mock completion logic matching expected agent JSON shapes
     // Uses task-type routing first (most reliable), then prompt pattern matching as fallback
     if ((options?.task as any) === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
-      throw new Error(`[LLM] Geração de roteiro falhou. Não é permitido retornar o script mock/template.`);
+      throw new Error(`[LLM] Geração de roteiro falhou com todos os provedores. Não é permitido retornar o script mock/template.`);
     }
 
     if (options?.jsonMode) {
@@ -193,33 +197,7 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
 
         return JSON.stringify({ summary, facts, sources });
       }
-      if (options?.task === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
-        return JSON.stringify({
-          title: "Análise dos Fatos Históricos",
-          hook: "Uma história surpreendente sobre este acontecimento que você precisa conhecer.",
-          body: [
-            {
-              content: 'A primeira análise revela detalhes profundos sobre como os eventos se desenrolaram.',
-              durationSeconds: 30,
-              visualNote: 'Cena impactante e misteriosa do evento'
-            },
-            {
-              content: 'Depois do momento de glória, as consequências moldaram as perspectivas futuras para sempre.',
-              durationSeconds: 30,
-              visualNote: 'Corte dramático mostrando o clímax'
-            },
-            {
-              content: 'Hoje o legado se mantém vivo através do que podemos observar de seus resultados duradouros.',
-              durationSeconds: 20,
-              visualNote: 'Encerramento reflexivo e calmo'
-            }
-          ],
-          cta: 'Como esses fatos mudaram a sua perspectiva?',
-          estimatedDurationSeconds: 80,
-          description: "Uma análise profunda e emocional sobre o impacto real dos acontecimentos.",
-          keywords: ['fatos', 'analise', 'impacto', 'historia']
-        });
-      }
+      // Script mock has been completely removed to prevent leaks.
       // KDR — KAIRO Deep Research (Cinematic Genome Library proposals)
       if (prompt.includes('Cinematic Genome Library') || prompt.includes('CGL')) {
         return JSON.stringify({
@@ -252,15 +230,7 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
       }
       if (options?.task === 'humanizer' || prompt.includes('Humanizer') || prompt.includes('humanizar')) {
-        return JSON.stringify({
-          hook: "Uma história surpreendente que vai prender sua atenção até o fim.",
-          sections: [
-            "Logo de cara, a gente percebe como as coisas foram muito intensas e dramáticas.",
-            "E não parou por aí, o momento central foi cheio de reviravoltas que ninguém esperava.",
-            "No fim das contas, a consequência de tudo isso deixou uma marca profunda e inesquecível."
-          ],
-          cta: "Qual sua parte favorita dessa história?"
-        });
+        throw new Error(`[LLM] Geração de roteiro (humanizer) falhou com todos os provedores. Não é permitido retornar o roteiro-fantasma (template genérico).`);
       }
       if (prompt.toLowerCase().includes('crítico') || prompt.toLowerCase().includes('critic') || prompt.toLowerCase().includes('avali')) {
         return JSON.stringify({

@@ -35,11 +35,16 @@ async function processCriticJob(job: Job<CriticJobData>) {
 
   // ─── Ghost Script Safety Net ──────────────────────────────────────────────
   const templatePhrases = [
-    "Uma história surpreendente sobre este acontecimento",
-    "A primeira análise revela detalhes profundos",
+    "Uma história surpreendente sobre",
+    "A primeira análise revela detalhes",
     "Depois do momento de glória",
-    "Hoje o legado se mantém vivo",
-    "Como esses fatos mudaram a sua perspectiva"
+    "Hoje o legado se mantém",
+    "Como esses fatos mudaram a sua",
+    "Uma história surpreendente que vai prender",
+    "Logo de cara, a gente percebe",
+    "E não parou por aí, o momento central",
+    "No fim das contas, a consequência",
+    "Qual sua parte favorita dessa história"
   ];
   const containsTemplate = templatePhrases.some(phrase => {
     const inHook = script.hook?.includes(phrase);
