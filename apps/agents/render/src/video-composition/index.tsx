@@ -1,6 +1,51 @@
 import { registerRoot, Composition, Sequence, Audio, Img, AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
 import React from 'react';
 import type { CanonArchetype } from '@cos/types';
+import { loadFont as loadPlayfair } from '@remotion/google-fonts/PlayfairDisplay';
+import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
+import { loadFont as loadCormorant } from '@remotion/google-fonts/CormorantGaramond';
+
+// Register Google Fonts to avoid runtime flashes/race conditions
+loadPlayfair('normal', {
+  weights: ['400', '700'],
+  subsets: ['latin'],
+});
+loadPlayfair('italic', {
+  weights: ['400', '700'],
+  subsets: ['latin'],
+});
+
+loadInter('normal', {
+  weights: ['300', '700', '900'],
+  subsets: ['latin'],
+});
+loadInter('italic', {
+  weights: ['300', '700', '900'],
+  subsets: ['latin'],
+});
+
+loadCormorant('normal', {
+  weights: ['400', '700'],
+  subsets: ['latin'],
+});
+loadCormorant('italic', {
+  weights: ['400', '700'],
+  subsets: ['latin'],
+});
+
+export function mapFontFamily(font: string): string {
+  const normalized = font.toLowerCase().replace(/['"]/g, '').trim();
+  if (normalized.includes('georgia') || normalized.includes('times new roman') || normalized.includes('serif') && !normalized.includes('sans-serif')) {
+    return 'Playfair Display';
+  }
+  if (normalized.includes('helvetica') || normalized.includes('arial') || normalized.includes('inter') || normalized.includes('sans-serif') || normalized.includes('system-ui')) {
+    return 'Inter';
+  }
+  if (normalized.includes('palatino') || normalized.includes('cormorant')) {
+    return 'Cormorant Garamond';
+  }
+  return 'Inter';
+}
 
 // ─── Canon Visual Themes ───────────────────────────────────────────────────────
 //
@@ -250,7 +295,7 @@ const AnimatedCaption: React.FC<{
           color: theme.captionColor,
           fontSize: 64,
           fontFamily: theme.fontFamily,
-          fontWeight: 900,
+          fontWeight: theme.fontWeight,
           fontStyle: theme.fontStyle,
           letterSpacing: '0.01em',
           textShadow: '0 4px 12px rgba(0, 0, 0, 0.95), 0 0 20px rgba(0, 0, 0, 0.7)',
@@ -438,9 +483,22 @@ export const MainVideo: React.FC<MainVideoProps> = ({
   audioContext,
   canonArchetype 
 }) => {
-  const theme = (canonArchetype && CANON_THEMES[canonArchetype])
+  const rawTheme = (canonArchetype && CANON_THEMES[canonArchetype])
     ? CANON_THEMES[canonArchetype]
     : CANON_THEMES['default'];
+
+  // Resolve custom font from globalStyle.typography if present in the manifest
+  let resolvedFontFamily = rawTheme.fontFamily;
+  if (globalStyle?.typography?.fontFamily) {
+    resolvedFontFamily = mapFontFamily(globalStyle.typography.fontFamily);
+  } else {
+    resolvedFontFamily = mapFontFamily(rawTheme.fontFamily);
+  }
+
+  const theme = {
+    ...rawTheme,
+    fontFamily: resolvedFontFamily,
+  };
 
   // Caso 1: Renderizar a partir do novo Storyboard/RenderManifest
   if (scenes && scenes.length > 0) {

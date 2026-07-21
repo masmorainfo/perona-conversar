@@ -12,15 +12,16 @@
   "dependencies": {
     "@cos/events": "workspace:*",
     "@cos/types": "workspace:*",
+    "@remotion/bundler": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.494",
+    "@remotion/renderer": "^4.0.0",
+    "@types/pg": "^8.11.0",
     "bullmq": "^5.0.0",
     "dotenv": "^16.0.0",
     "pg": "^8.11.0",
-    "@types/pg": "^8.11.0",
-    "remotion": "^4.0.0",
-    "@remotion/renderer": "^4.0.0",
-    "@remotion/bundler": "^4.0.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

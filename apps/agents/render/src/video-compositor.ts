@@ -111,28 +111,41 @@ export async function compositeVideo(
       const memoriesDir = path.join(process.cwd(), 'packages/knowledge/memories');
       
       // Resolução do caminho absoluto da trilha sonora (BGM) para que o Remotion a renderize nativamente
+      // Resolução do caminho absoluto da trilha sonora (BGM) para que o Remotion a renderize nativamente
       if (manifest.audioContext.bgmUrl) {
-        const bgmPath = path.isAbsolute(manifest.audioContext.bgmUrl)
-          ? manifest.audioContext.bgmUrl
-          : path.join(memoriesDir, manifest.audioContext.bgmUrl);
-
-        if (fs.existsSync(bgmPath)) {
-          manifest.audioContext.bgmUrl = toLocalUrl(bgmPath);
+        if (manifest.audioContext.bgmUrl.startsWith('http://') || manifest.audioContext.bgmUrl.startsWith('https://')) {
+          // Mantém URL remota
         } else {
-          console.warn(`[Video Compositor] ⚠️ Trilha sonora não encontrada no disco: ${bgmPath}. Renderizando sem música de fundo.`);
-          manifest.audioContext.bgmUrl = '';
+          const bgmPath = path.isAbsolute(manifest.audioContext.bgmUrl)
+            ? manifest.audioContext.bgmUrl
+            : path.join(memoriesDir, manifest.audioContext.bgmUrl);
+
+          if (fs.existsSync(bgmPath)) {
+            manifest.audioContext.bgmUrl = toLocalUrl(bgmPath);
+          } else {
+            console.warn(`[Video Compositor] ⚠️ Trilha sonora não encontrada no disco: ${bgmPath}. Renderizando sem música de fundo.`);
+            manifest.audioContext.bgmUrl = '';
+          }
         }
       }
 
-      // Converter cada cena (imagem e locução) para usar protocolo http
+      // Converter cada cena (imagem e locução) para usar protocolo http se forem locais, ou manter URL se forem remotas
       for (const scene of manifest.scenes) {
-        if (scene.layout.mediaUrl && fs.existsSync(scene.layout.mediaUrl)) {
-          scene.layout.mediaUrl = toLocalUrl(scene.layout.mediaUrl);
+        if (scene.layout.mediaUrl) {
+          if (scene.layout.mediaUrl.startsWith('http://') || scene.layout.mediaUrl.startsWith('https://')) {
+            // Mantém URL remota
+          } else if (fs.existsSync(scene.layout.mediaUrl)) {
+            scene.layout.mediaUrl = toLocalUrl(scene.layout.mediaUrl);
+          }
         }
         
         const narrationPath = (scene.layout as any).narrationPath;
-        if (narrationPath && fs.existsSync(narrationPath)) {
-          (scene.layout as any).narrationUrl = toLocalUrl(narrationPath);
+        if (narrationPath) {
+          if (narrationPath.startsWith('http://') || narrationPath.startsWith('https://')) {
+            (scene.layout as any).narrationUrl = narrationPath;
+          } else if (fs.existsSync(narrationPath)) {
+            (scene.layout as any).narrationUrl = toLocalUrl(narrationPath);
+          }
         }
 
         const durationInFrames = Math.ceil((scene.durationMs / 1000) * fps);
@@ -325,8 +338,8 @@ export async function masterAudio(
 
   console.log(`[Video Compositor] masterAudio: Applying master fade-out. Start: ${fadeStartSec}s, Duration: ${fadeDurationSec}s`);
 
-  // ffmpeg command to apply audio fade-out (afade) to the existing audio stream.
-  const ffmpegCmd = `ffmpeg -nostdin -y -i "${inputVideoPath}" -af "afade=t=out:st=${fadeStartSec}:d=${fadeDurationSec}" -c:v copy -c:a aac -b:a 192k "${outputVideoPath}"`;
+  // ffmpeg command to apply loudness normalization and audio fade-out (afade) to the existing audio stream.
+  const ffmpegCmd = `ffmpeg -nostdin -y -i "${inputVideoPath}" -af "loudnorm=I=-14:TP=-1.5:LRA=11,afade=t=out:st=${fadeStartSec}:d=${fadeDurationSec}" -c:v copy -c:a aac -b:a 192k "${outputVideoPath}"`;
 
   try {
     await execAsync(ffmpegCmd);

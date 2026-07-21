@@ -294,6 +294,70 @@ export class MemoryProvider {
   }
 
   /**
+   * Faz o upload de um arquivo local para o S3 da Zernio e retorna a URL pública permanente.
+   * Lança erro explícito se o upload falhar.
+   */
+  private async uploadFileToS3(localPath: string, contentType: string): Promise<string> {
+    try {
+      const apiKey = process.env.ZERNIO_API_KEY;
+      if (!apiKey) {
+        throw new Error('ZERNIO_API_KEY is not defined in environment variables.');
+      }
+
+      const { default: Zernio } = await import('@zernio/node');
+      const zernio = new (Zernio as any)({ apiKey });
+      const stats = fs.statSync(localPath);
+      const filename = path.basename(localPath);
+
+      console.log(`[Memory Provider] Solicitando URL pré-assinada do Zernio para ${filename} (${stats.size} bytes)...`);
+      const presignRes = await zernio.media.getMediaPresignedUrl({
+        body: { filename, contentType, size: stats.size }
+      });
+      
+      const uploadUrl = presignRes.data?.uploadUrl;
+      const publicUrl = presignRes.data?.publicUrl;
+
+      if (!uploadUrl || !publicUrl) {
+        throw new Error(`Failed to generate presigned upload/public URL from Zernio for ${filename}`);
+      }
+
+      // Upload via https/http request
+      const https = await import('https');
+      const http = await import('http');
+      await new Promise<void>((resolve, reject) => {
+        const parsedUrl = new URL(uploadUrl);
+        const isHttps = parsedUrl.protocol === 'https:';
+        const reqMod = isHttps ? https : http;
+        const req = (reqMod as any).request(
+          {
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port || (isHttps ? 443 : 80),
+            path: parsedUrl.pathname + parsedUrl.search,
+            method: 'PUT',
+            headers: { 'Content-Type': contentType, 'Content-Length': stats.size },
+          },
+          (res: any) => {
+            res.resume();
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+              resolve();
+            } else {
+              reject(new Error(`S3 PUT failed with status code ${res.statusCode}`));
+            }
+          }
+        );
+        req.on('error', reject);
+        fs.createReadStream(localPath).pipe(req);
+      });
+
+      console.log(`[Memory Provider] Upload concluído com sucesso. URL pública: ${publicUrl}`);
+      return publicUrl;
+    } catch (err: any) {
+      console.error(`[Memory Provider] Erro crítico no upload de ${localPath} para o S3:`, err);
+      throw new Error(`S3 Upload Failure for ${path.basename(localPath)}: ${err.message}`);
+    }
+  }
+
+  /**
    * Executa a síntese física dos ativos de IA (geração de imagens e vozes) pendentes.
    */
   public async synthesizeAssets(
@@ -320,31 +384,39 @@ export class MemoryProvider {
         console.log(`[Memory Provider] [IA Speech] Gerando áudio para cena ${idx + 1}...`);
         const speechResult = await voiceProvider.generateSpeech(scene.captions.text, audioFile);
 
+        let finalLocalPath = '';
         // Handle both legacy string return and new SpeechResult with timestamps
         if (typeof speechResult === 'object' && 'audioPath' in speechResult) {
-          layout.narrationPath = speechResult.audioPath;
-          assetUrls[`voiceover_scene_${idx}`] = speechResult.audioPath;
+          finalLocalPath = speechResult.audioPath;
           // Inject word-level timestamps into captions for synchronized rendering
           if (speechResult.wordTimestamps && speechResult.wordTimestamps.length > 0) {
             (scene.captions as any).wordTimestamps = speechResult.wordTimestamps;
             console.log(`[Memory Provider] 🎯 ${speechResult.wordTimestamps.length} word timestamps injected for scene ${idx + 1}`);
           }
         } else {
-          layout.narrationPath = speechResult;
-          assetUrls[`voiceover_scene_${idx}`] = speechResult as string;
+          finalLocalPath = speechResult;
         }
 
+        // Subir para o S3 e atualizar no manifesto
+        const publicAudioUrl = await this.uploadFileToS3(finalLocalPath, 'audio/mpeg');
+        layout.narrationPath = publicAudioUrl;
+        assetUrls[`voiceover_scene_${idx}`] = publicAudioUrl;
+
         // Atualiza para a duração real do áudio gravado + margem para evitar corte seco
-        const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
+        const realDurationMs = this.getAudioDurationMs(finalLocalPath);
         // Onda C: margem aumentada 500ms → 800ms para evitar corte seco (ElevenLabs tem latência ligeiramente maior)
         scene.durationMs = realDurationMs + 800;
-      } else if (layout.narrationPath && fs.existsSync(layout.narrationPath)) {
-        // Áudio já existe (rerenderização): mede a duração real sem regerar
-        // Corrige o bug onde durationMs ficava em 5800ms (estimativa) após o primeiro render
-        const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
-        scene.durationMs = realDurationMs + 800;
-        assetUrls[`voiceover_scene_${idx}`] = layout.narrationPath;
-        console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: áudio existente medido = ${realDurationMs}ms → durationMs = ${scene.durationMs}ms`);
+      } else if (layout.narrationPath) {
+        if (layout.narrationPath.startsWith('http://') || layout.narrationPath.startsWith('https://')) {
+          assetUrls[`voiceover_scene_${idx}`] = layout.narrationPath;
+          console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: áudio remoto mantido = ${layout.narrationPath}`);
+        } else if (fs.existsSync(layout.narrationPath)) {
+          // Áudio já existe localmente (rerenderização): mede a duração real sem regerar
+          const realDurationMs = this.getAudioDurationMs(layout.narrationPath);
+          scene.durationMs = realDurationMs + 800;
+          assetUrls[`voiceover_scene_${idx}`] = layout.narrationPath;
+          console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: áudio existente medido = ${realDurationMs}ms → durationMs = ${scene.durationMs}ms`);
+        }
       }
 
       // 2. Gera imagem de IA se necessário
@@ -357,11 +429,19 @@ export class MemoryProvider {
           `[Memory Provider] [IA Visual${layout.isAbstraction ? ' ABSTRAÇÃO' : ''}] Gerando imagem para cena ${idx + 1}...`
         );
         await imageProvider.generateImage(prompt, visualFile);
-        layout.mediaUrl = visualFile;
-        assetUrls[`visual_scene_${idx}`] = visualFile;
-      } else if (layout.mediaUrl && fs.existsSync(layout.mediaUrl)) {
-        // Se for arquivo autêntico existente localmente, associa para compatibilidade
-        assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
+        
+        // Subir para o S3 e atualizar no manifesto
+        const publicImageUrl = await this.uploadFileToS3(visualFile, 'image/jpeg');
+        layout.mediaUrl = publicImageUrl;
+        assetUrls[`visual_scene_${idx}`] = publicImageUrl;
+      } else if (layout.mediaUrl) {
+        if (layout.mediaUrl.startsWith('http://') || layout.mediaUrl.startsWith('https://')) {
+          assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
+          console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: imagem remota mantida = ${layout.mediaUrl}`);
+        } else if (fs.existsSync(layout.mediaUrl)) {
+          // Se for arquivo autêntico existente localmente, associa para compatibilidade
+          assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
+        }
       }
     }
 

@@ -256,6 +256,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.20.0
+      '@zernio/node':
+        specifier: ^0.2.296
+        version: 0.2.296
       bullmq:
         specifier: ^5.0.0
         version: 5.79.1
@@ -386,6 +389,9 @@ importers:
       '@remotion/bundler':
         specifier: ^4.0.0
         version: 4.0.484(@swc/helpers@0.5.15)(postcss@8.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@remotion/google-fonts':
+        specifier: ^4.0.494
+        version: 4.0.494(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@remotion/renderer':
         specifier: ^4.0.0
         version: 4.0.484(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1513,6 +1519,9 @@ packages:
     resolution: {integrity: sha512-MxTN7uCZ5zD+X7TaaYfAR4ewtH9BZ7Wh5xS+oRJ72XbNHV/d+nULtOG3VdphFo/HhaPRzTYO9i/sZjogE+In/g==}
     cpu: [x64]
     os: [win32]
+
+  '@remotion/google-fonts@4.0.494':
+    resolution: {integrity: sha512-rVlLrz/jvNBn2O3eNxZCPbwTeQOdzpfOOur/vaLppKwEC4ExvAHp1kiGOA/RoziYEmsIjvQc7OvUlSsBJuv8sQ==}
 
   '@remotion/licensing@4.0.484':
     resolution: {integrity: sha512-YtiERD4bC3n5yQtNgEZasdZXqDKjIJssjKDLL+YjGDU3mMcw/93my83UU6jJVCB7TBrIms8DVbCgqt4hhU8kMA==}
@@ -4053,6 +4062,12 @@ packages:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
 
+  remotion@4.0.494:
+    resolution: {integrity: sha512-WiAUJ5rjhoYvBJzwp8ZLybhJZLe6VAwWk7pbs9Jv1yYLbHAV9RraUaNHuegaIKbbmgW2c9UDPgKjdZ9k9XjTyA==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
@@ -5241,6 +5256,13 @@ snapshots:
 
   '@remotion/compositor-win32-x64-msvc@4.0.484':
     optional: true
+
+  '@remotion/google-fonts@4.0.494(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      remotion: 4.0.494(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+    transitivePeerDependencies:
+      - react
+      - react-dom
 
   '@remotion/licensing@4.0.484': {}
 
@@ -8103,6 +8125,11 @@ snapshots:
       set-function-name: 2.0.2
 
   remotion@4.0.484(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
+  remotion@4.0.494(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)

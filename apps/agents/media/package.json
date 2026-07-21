@@ -14,6 +14,7 @@
     "@cos/llm": "workspace:*",
     "@cos/types": "workspace:*",
     "@types/pg": "^8.11.0",
+    "@zernio/node": "^0.2.296",
     "bullmq": "^5.0.0",
     "dotenv": "^16.0.0",
     "pg": "^8.11.0",
