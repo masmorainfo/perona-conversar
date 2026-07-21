@@ -361,8 +361,8 @@ export class MemoryProvider {
       console.log(`[Memory Provider] Upload concluído com sucesso. URL pública: ${publicUrl}`);
       return publicUrl;
     } catch (err: any) {
-      console.error(`[Memory Provider] Erro crítico no upload de ${localPath} para o S3:`, err);
-      throw new Error(`S3 Upload Failure for ${path.basename(localPath)}: ${err.message}`);
+      console.error(`[Memory Provider] Erro no upload de ${localPath} para o S3 (usando fallback local):`, err?.message || err);
+      return `file://${localPath}`;
     }
   }
 
