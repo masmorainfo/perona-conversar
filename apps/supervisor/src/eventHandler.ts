@@ -502,9 +502,36 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
           const qName = `publish-${platform}`;
           // Enrich metadata from script/research phases
           const script = (context.metadata.script || {}) as any;
+          
+          let description = script.description || script.hook || '';
+          
+          // Fetch manifest to append credits from S3 URL
+          if (context.metadata.assetUrls?.storyManifestUrl) {
+            try {
+              const res = await fetch(context.metadata.assetUrls.storyManifestUrl);
+              if (res.ok) {
+                const manifest = await res.json();
+                const credits = (manifest.scenes || [])
+                  .filter((s: any) => s.layout?.sourcingMetadata)
+                  .map((s: any) => {
+                    const meta = s.layout.sourcingMetadata;
+                    return `Visual: ${meta.title || 'Imagem'} por ${meta.author || 'Desconhecido'} (${meta.source} - ${meta.license})`;
+                  });
+                  
+                const uniqueCredits = [...new Set<string>(credits)];
+                
+                if (uniqueCredits.length > 0) {
+                  description += '\n\nCréditos de Imagem:\n' + uniqueCredits.join('\n');
+                }
+              }
+            } catch (err) {
+              console.error('[Supervisor] Failed to fetch manifest for credits:', err);
+            }
+          }
+
           const publishMetadata = {
             title: script.title || context.topic,
-            description: script.description || script.hook || '',
+            description,
             tags: script.keywords || script.tags || script.hashtags || [],
           };
 

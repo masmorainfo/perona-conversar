@@ -35,11 +35,11 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       accent: '#cba6f7', // Lavender accent
       background: '#050810',
       overlayColor: '#0a1628',
-      overlayOpacity: 0.45,
+      overlayOpacity: 0.25,
       vignetteColor: 'rgba(5, 8, 16, 0.7)',
     },
     audio: {
-      bgmName: 'heroi_tragico_piano.mp3',
+      bgmName: 'deep_tension.mp3',
       bgmVolume: 0.20,
       voiceTempo: 'slow',
       sfxIntensity: 'minimal',
@@ -53,11 +53,11 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       accent: '#f9e2af',
       background: '#1a0f05',
       overlayColor: '#3d2010',
-      overlayOpacity: 0.35,
+      overlayOpacity: 0.25,
       vignetteColor: 'rgba(26, 15, 5, 0.65)',
     },
     audio: {
-      bgmName: 'exilado_arpeggio.mp3',
+      bgmName: 'epic_reveal.mp3',
       bgmVolume: 0.25,
       voiceTempo: 'measured',
       sfxIntensity: 'moderate',
@@ -71,11 +71,11 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       accent: '#a6e3a1',
       background: '#0d120e',
       overlayColor: '#1a2a1c',
-      overlayOpacity: 0.30,
+      overlayOpacity: 0.25,
       vignetteColor: 'rgba(13, 18, 14, 0.6)',
     },
     audio: {
-      bgmName: 'eterno_segundo_chamber.mp3',
+      bgmName: 'deep_tension.mp3',
       bgmVolume: 0.18,
       voiceTempo: 'measured',
       sfxIntensity: 'minimal',
@@ -89,11 +89,11 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       accent: '#f38ba8', // Faded red/crimson
       background: '#0a0a0a',
       overlayColor: '#111111',
-      overlayOpacity: 0.50,
+      overlayOpacity: 0.25,
       vignetteColor: 'rgba(10, 10, 10, 0.75)',
     },
     audio: {
-      bgmName: 'martir_solitude.mp3',
+      bgmName: 'deep_tension.mp3',
       bgmVolume: 0.15,
       voiceTempo: 'slow',
       sfxIntensity: 'minimal',
@@ -107,11 +107,11 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       accent: '#89b4fa',
       background: '#020408',
       overlayColor: '#001020',
-      overlayOpacity: 0.20,
+      overlayOpacity: 0.25,
       vignetteColor: 'rgba(0, 0, 20, 0.5)',
     },
     audio: {
-      bgmName: 'momento_impossivel_epic.mp3',
+      bgmName: 'epic_reveal.mp3',
       bgmVolume: 0.28,
       voiceTempo: 'normal',
       sfxIntensity: 'heavy',
@@ -127,11 +127,11 @@ const DEFAULT_DIRECTION: Omit<CinematicDirection, 'canonArchetype'> = {
     accent: '#89b4fa',
     background: '#000000',
     overlayColor: '#000000',
-    overlayOpacity: 0.35,
+    overlayOpacity: 0.25,
     vignetteColor: 'rgba(0,0,0,0.5)',
   },
   audio: {
-    bgmName: 'default_music.mp3',
+    bgmName: 'deep_tension.mp3',
     bgmVolume: 0.20,
     voiceTempo: 'normal',
     sfxIntensity: 'moderate',
@@ -150,6 +150,18 @@ const AUDIO_GENES = {
     bgmVolume: 0.28,
     voiceTempo: 'normal' as const,
     sfxIntensity: 'heavy' as const,
+  },
+  epic_reveal: {
+    bgmName: 'epic_reveal.mp3',
+    bgmVolume: 0.25,
+    voiceTempo: 'measured' as const,
+    sfxIntensity: 'moderate' as const,
+  },
+  deep_tension: {
+    bgmName: 'deep_tension.mp3',
+    bgmVolume: 0.18,
+    voiceTempo: 'slow' as const,
+    sfxIntensity: 'minimal' as const,
   }
 };
 
@@ -160,7 +172,7 @@ const VISUAL_GENES = {
     accent: '#cba6f7',
     background: '#050810',
     overlayColor: '#0a1628',
-    overlayOpacity: 0.45,
+    overlayOpacity: 0.25,
     vignetteColor: 'rgba(5, 8, 16, 0.7)',
   },
 };
@@ -243,4 +255,3 @@ export function directNarrative(canonArchetype?: CanonArchetype): CinematicDirec
     ...directionProps,
   };
 }
-

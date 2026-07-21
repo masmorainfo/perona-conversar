@@ -74,7 +74,7 @@ const CANON_THEMES: Record<CanonArchetype | 'default', CanonTheme> = {
   heroi_tragico: {
     background: '#050810',
     overlayColor: '#0a1628',
-    overlayOpacity: 0.45,
+    overlayOpacity: 0.25,
     captionColor: '#e8eef7',
     captionBackground: 'rgba(5, 8, 16, 0.85)',
     captionBorder: '1px solid rgba(100, 140, 200, 0.3)',
@@ -91,7 +91,7 @@ const CANON_THEMES: Record<CanonArchetype | 'default', CanonTheme> = {
   exilado_que_retorna: {
     background: '#1a0f05',
     overlayColor: '#3d2010',
-    overlayOpacity: 0.35,
+    overlayOpacity: 0.25,
     captionColor: '#f5e8c8',
     captionBackground: 'rgba(26, 15, 5, 0.80)',
     captionBorder: '1px solid rgba(200, 150, 80, 0.4)',
@@ -108,7 +108,7 @@ const CANON_THEMES: Record<CanonArchetype | 'default', CanonTheme> = {
   eterno_segundo: {
     background: '#0d120e',
     overlayColor: '#1a2a1c',
-    overlayOpacity: 0.30,
+    overlayOpacity: 0.25,
     captionColor: '#dde8dd',
     captionBackground: 'rgba(13, 18, 14, 0.82)',
     captionBorder: '1px solid rgba(120, 160, 120, 0.25)',
@@ -125,7 +125,7 @@ const CANON_THEMES: Record<CanonArchetype | 'default', CanonTheme> = {
   martir_esquecido: {
     background: '#0a0a0a',
     overlayColor: '#111111',
-    overlayOpacity: 0.50,
+    overlayOpacity: 0.25,
     captionColor: '#e0e0e0',
     captionBackground: 'rgba(10, 10, 10, 0.88)',
     captionBorder: '1px solid rgba(180, 30, 30, 0.5)',
@@ -158,7 +158,7 @@ const CANON_THEMES: Record<CanonArchetype | 'default', CanonTheme> = {
   default: {
     background: '#000000',
     overlayColor: '#000000',
-    overlayOpacity: 0.35,
+    overlayOpacity: 0.25,
     captionColor: '#ffffff',
     captionBackground: 'rgba(0, 0, 0, 0.70)',
     captionBorder: 'none',
@@ -171,9 +171,57 @@ const CANON_THEMES: Record<CanonArchetype | 'default', CanonTheme> = {
   },
 };
 
-// ─── Vinheta (Vignette) ────────────────────────────────────────────────────────
-// Bordas escurecidas que criam profundidade cinematográfica
+// ─── Componentes Visuais (FilmGrain, DuotoneFilter, Vignette) ─────────────────
 
+// Helper to convert hex to RGB
+function hexToRgb(hex: string) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16) / 255,
+    g: parseInt(result[2], 16) / 255,
+    b: parseInt(result[3], 16) / 255
+  } : { r: 0, g: 0, b: 0 };
+}
+
+const DuotoneFilter: React.FC<{ theme: CanonTheme; id: string }> = ({ theme, id }) => {
+  const color1 = hexToRgb(theme.background);
+  const color2 = hexToRgb(theme.overlayColor);
+  
+  return (
+    <svg style={{ width: 0, height: 0, position: 'absolute' }}>
+      <filter id={id} colorInterpolationFilters="sRGB">
+        <feColorMatrix 
+          type="matrix" 
+          values="0.3333 0.3333 0.3333 0 0
+                  0.3333 0.3333 0.3333 0 0
+                  0.3333 0.3333 0.3333 0 0
+                  0 0 0 1 0" 
+          result="gray"
+        />
+        <feComponentTransfer in="gray" result="duotone">
+          <feFuncR type="table" tableValues={`${color1.r} ${color2.r}`} />
+          <feFuncG type="table" tableValues={`${color1.g} ${color2.g}`} />
+          <feFuncB type="table" tableValues={`${color1.b} ${color2.b}`} />
+          <feFuncA type="table" tableValues="1 1" />
+        </feComponentTransfer>
+      </filter>
+    </svg>
+  );
+};
+
+const FilmGrain: React.FC = () => (
+  <AbsoluteFill
+    style={{
+      backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+      opacity: 0.15,
+      pointerEvents: 'none',
+      mixBlendMode: 'overlay',
+      zIndex: 10,
+    }}
+  />
+);
+
+// Bordas escurecidas que criam profundidade cinematográfica
 const Vignette: React.FC<{ color: string }> = ({ color }) => (
   <AbsoluteFill
     style={{
@@ -281,7 +329,7 @@ const AnimatedCaption: React.FC<{
     <div
       style={{
         position: 'absolute',
-        bottom: 480,
+        top: '68%',
         left: 20,
         right: 20,
         display: 'flex',
@@ -344,6 +392,7 @@ const VideoSectionFrame: React.FC<{
       <AtmosphericOverlay color={theme.overlayColor} opacity={theme.overlayOpacity} />
       <Vignette color={theme.vignetteColor} />
       <Audio src={section.audioUrl} />
+      <FilmGrain />
       <AnimatedCaption
         text={section.text}
         theme={theme}
@@ -412,7 +461,8 @@ const SceneFrame: React.FC<{
   }
 
   // 2. Mapear Efeito / Filtro Visual
-  let cssFilter = 'none';
+  // Apply the duotone SVG filter mapped to the theme
+  let cssFilter = 'url(#canon-duotone) contrast(1.1)';
   if (layout.effect === 'monochrome') {
     cssFilter = 'grayscale(100%) contrast(1.18) brightness(0.95)';
   } else if (layout.effect === 'sepia') {
@@ -449,6 +499,8 @@ const SceneFrame: React.FC<{
       {/* Áudio da Narração / Locução se houver */}
       {layout.narrationUrl && <Audio src={layout.narrationUrl} />}
  
+      <FilmGrain />
+
       {/* Legendas com fade-in */}
       {captions.text && (
         <AnimatedCaption
@@ -505,6 +557,7 @@ export const MainVideo: React.FC<MainVideoProps> = ({
     let currentFrame = 0;
     return (
       <AbsoluteFill style={{ backgroundColor: theme.background }}>
+        <DuotoneFilter theme={theme} id="canon-duotone" />
         {/* Tocar Trilha Sonora (BGM) global com o volume configurado */}
         {audioContext && audioContext.bgmUrl && (
           <Audio 
@@ -536,6 +589,7 @@ export const MainVideo: React.FC<MainVideoProps> = ({
   let currentFrame = 0;
   return (
     <AbsoluteFill style={{ backgroundColor: theme.background }}>
+      <DuotoneFilter theme={theme} id="canon-duotone" />
       {sections.map((section, idx) => {
         const from = currentFrame;
         currentFrame += section.durationInFrames;

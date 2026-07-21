@@ -4,6 +4,7 @@ import type { RenderManifest, TechnicalSceneProps, CanonArchetype } from '@cos/t
 import type { VoiceProvider, ImageProvider, SpeechResult } from '@cos/llm';
 import type { CinematicDirection } from './director.js';
 import type { PlannedScene } from './storyboard-planner.js';
+import { sourceVisual } from './visual-sourcing.js';
 
 interface MemoryAsset {
   filename: string;
@@ -131,11 +132,11 @@ export class MemoryProvider {
    *   'subject' → rosto de pessoa NUNCA gerado por IA → retorna 'ai_abstraction:<idx>' (silúueta/símbolo)
    *   'context' → comportamento anterior: busca autêntica → match ou 'ai_visual:<idx>' (ambiente)
    */
-  private resolveVisualSource(
+  private async resolveVisualSource(
     visualDescription: string,
     sceneIndex: number,
     sceneSubject: 'subject' | 'context'
-  ): { mediaPath: string; isAiFallback: boolean; isAbstraction: boolean } {
+  ): Promise<{ mediaPath: string; isAiFallback: boolean; isAbstraction: boolean; sourcingMetadata?: any }> {
     // Cena de sujeito: nunca tenta buscar imagem real nem gerar rosto
     if (sceneSubject === 'subject') {
       console.log(
@@ -154,6 +155,13 @@ export class MemoryProvider {
         `(score: ${best.score.toFixed(2)}, tags: [${best.asset.tags.join(', ')}])`
       );
       return { mediaPath: best.fullPath, isAiFallback: false, isAbstraction: false };
+    }
+
+    // Tenta sourcing online real (Wikimedia, Openverse)
+    const sourced = await sourceVisual(visualDescription);
+    if (sourced) {
+      console.log(`[Memory Provider] 🔵 SOURCING cena ${sceneIndex}: Encontrado via ${sourced.source}`);
+      return { mediaPath: sourced.url, isAiFallback: false, isAbstraction: false, sourcingMetadata: sourced };
     }
 
     console.log(
@@ -215,7 +223,7 @@ export class MemoryProvider {
       }
 
       // 2. Resolver Mídia Visual (Autêntica, Abstração ou Fallback IA de ambiente)
-      const visualSource = this.resolveVisualSource(
+      const visualSource = await this.resolveVisualSource(
         pScene.visualDescription,
         idx,
         pScene.sceneSubject
@@ -247,6 +255,7 @@ export class MemoryProvider {
           rhetoricalWeight: pScene.rhetoricalWeight ?? 'normal',
           effect: pScene.effect as any,
           ...(narrationPath ? { narrationPath } : {}),
+          ...(visualSource.sourcingMetadata ? { sourcingMetadata: visualSource.sourcingMetadata } : {}),
           cameraMovement: pScene.cameraMovement,
           aiPrompt,
           isAiFallback: visualSource.isAiFallback,
@@ -357,6 +366,13 @@ export class MemoryProvider {
     }
   }
 
+  private async downloadUrlToLocal(url: string, destPath: string): Promise<void> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.statusText}`);
+    const buffer = await res.arrayBuffer();
+    fs.writeFileSync(destPath, Buffer.from(buffer));
+  }
+
   /**
    * Executa a síntese física dos ativos de IA (geração de imagens e vozes) pendentes.
    */
@@ -436,8 +452,20 @@ export class MemoryProvider {
         assetUrls[`visual_scene_${idx}`] = publicImageUrl;
       } else if (layout.mediaUrl) {
         if (layout.mediaUrl.startsWith('http://') || layout.mediaUrl.startsWith('https://')) {
-          assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
-          console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: imagem remota mantida = ${layout.mediaUrl}`);
+          if (layout.sourcingMetadata) {
+            // Nova lógica: baixar da fonte e re-upar no S3 Zernio para durabilidade
+            console.log(`[Memory Provider] 🔄 Baixando imagem do sourcing: ${layout.mediaUrl}`);
+            const ext = layout.mediaUrl.split('.').pop()?.split('?')[0] || 'jpg';
+            const visualFile = path.join(assetsDir, `sourcing_scene_${idx}.${ext}`);
+            await this.downloadUrlToLocal(layout.mediaUrl, visualFile);
+            const publicImageUrl = await this.uploadFileToS3(visualFile, `image/${ext === 'png' ? 'png' : 'jpeg'}`);
+            layout.mediaUrl = publicImageUrl;
+            assetUrls[`visual_scene_${idx}`] = publicImageUrl;
+            console.log(`[Memory Provider] ✅ Sourcing re-upado: ${publicImageUrl}`);
+          } else {
+            assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
+            console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: imagem remota mantida = ${layout.mediaUrl}`);
+          }
         } else if (fs.existsSync(layout.mediaUrl)) {
           // Se for arquivo autêntico existente localmente, associa para compatibilidade
           assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
@@ -451,6 +479,11 @@ export class MemoryProvider {
     manifest.audioContext.totalDurationMs = totalDurationMs;
     const updatedManifestPath = path.join(assetsDir, 'story_manifest.json');
     fs.writeFileSync(updatedManifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+    
+    // Upload manifest to S3 for durability
+    const publicManifestUrl = await this.uploadFileToS3(updatedManifestPath, 'application/json');
+    assetUrls['storyManifestUrl'] = publicManifestUrl;
+
     console.log(`[Memory Provider] ✅ Manifest atualizado com durações reais. Total: ${totalDurationMs}ms (${(totalDurationMs/1000).toFixed(1)}s). Salvo em: ${updatedManifestPath}`);
 
     return { manifest, assetUrls };
