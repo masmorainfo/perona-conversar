@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 export interface CinematicDirection {
   canonArchetype: CanonArchetype | 'default';
   mood: string;
+  pace: 'seco' | 'longo';
   colors: {
     primary: string;
     secondary: string;
@@ -44,6 +45,7 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       voiceTempo: 'slow',
       sfxIntensity: 'minimal',
     },
+    pace: 'longo',
   },
   exilado_que_retorna: {
     mood: 'Redenção + Melancolia. Esperança sob luz dourada.',
@@ -62,6 +64,7 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       voiceTempo: 'measured',
       sfxIntensity: 'moderate',
     },
+    pace: 'seco',
   },
   eterno_segundo: {
     mood: 'Injustiça + Dignidade. A nobreza silenciosa de quem não levou a coroa.',
@@ -80,6 +83,7 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       voiceTempo: 'measured',
       sfxIntensity: 'minimal',
     },
+    pace: 'longo',
   },
   martir_esquecido: {
     mood: 'Solidão + Legado. O silêncio e paz de uma história oculta.',
@@ -98,6 +102,7 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       voiceTempo: 'slow',
       sfxIntensity: 'minimal',
     },
+    pace: 'longo',
   },
   momento_impossivel: {
     mood: 'Espanto + Êxtase. Blinding contrast, o instante sobrenatural.',
@@ -116,6 +121,7 @@ const CANON_DIRECTIONS: Record<CanonArchetype, Omit<CinematicDirection, 'canonAr
       voiceTempo: 'normal',
       sfxIntensity: 'heavy',
     },
+    pace: 'seco',
   },
 };
 
@@ -136,6 +142,7 @@ const DEFAULT_DIRECTION: Omit<CinematicDirection, 'canonArchetype'> = {
     voiceTempo: 'normal',
     sfxIntensity: 'moderate',
   },
+  pace: 'seco',
 };
 
 const AUDIO_GENES = {
@@ -249,6 +256,8 @@ export function directNarrative(canonArchetype?: CanonArchetype): CinematicDirec
       };
     }
   }
+
+  directionProps.colors.overlayOpacity = Math.min(directionProps.colors.overlayOpacity, 0.25);
 
   return {
     canonArchetype: archetype,

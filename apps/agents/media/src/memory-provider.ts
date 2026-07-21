@@ -265,7 +265,7 @@ export class MemoryProvider {
           text: pScene.text,
           style: 'karaoke',
           positionX: 50,
-          positionY: 85,
+          positionY: 68,
         },
         overlays: [],
       });

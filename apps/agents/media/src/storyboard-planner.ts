@@ -158,15 +158,66 @@ function resolveCameraMovement(
   }
 }
 
+function chunkTextIntoScenes(text: string): string[] {
+  if (!text) return [];
+  const parts = text.split(/([.!?]+[\s]*)/);
+  const chunks: string[] = [];
+  let current = '';
+  for (let i = 0; i < parts.length; i++) {
+    current += parts[i];
+    if (i % 2 === 1 || i === parts.length - 1) {
+      const trimmed = current.trim();
+      if (trimmed) chunks.push(trimmed);
+      current = '';
+    }
+  }
+  
+  const finalChunks: string[] = [];
+  for (const chunk of chunks) {
+    if (chunk.split(/\s+/).length > 12) {
+      const subparts = chunk.split(/([,;]+[\s]*)/);
+      let subCurrent = '';
+      for (let j = 0; j < subparts.length; j++) {
+        subCurrent += subparts[j];
+        if (j % 2 === 1 || j === subparts.length - 1) {
+          const trimmed = subCurrent.trim();
+          if (trimmed) finalChunks.push(trimmed);
+          subCurrent = '';
+        }
+      }
+    } else {
+      finalChunks.push(chunk);
+    }
+  }
+
+  const mergedChunks: string[] = [];
+  let buffer = '';
+  for (const chunk of finalChunks) {
+    buffer = buffer ? `${buffer} ${chunk}` : chunk;
+    if (buffer.split(/\s+/).length >= 6) {
+      mergedChunks.push(buffer);
+      buffer = '';
+    }
+  }
+  if (buffer) {
+    if (mergedChunks.length > 0 && buffer.split(/\s+/).length < 4) {
+      mergedChunks[mergedChunks.length - 1] += ` ${buffer}`;
+    } else {
+      mergedChunks.push(buffer);
+    }
+  }
+  return mergedChunks.length > 0 ? mergedChunks : [text];
+}
+
 export function planStoryboard(
   script: Script,
   direction: CinematicDirection
 ): PlannedScene[] {
   const scenes: PlannedScene[] = [];
   const paletteGene = direction.canonArchetype;
+  let globalSceneIdx = 0;
 
   // 1. Hook Scene (TikTok hook, primeiros 15s)
-  // Hook é sempre 'context': precisa de energia visual máxima — nunca restringir a abstração.
   scenes.push({
     id: uuidv4(),
     text: script.hook,
@@ -176,11 +227,11 @@ export function planStoryboard(
     rhetoricalWeight: 'critical',
     transitionIn: 'fade',
     transitionDurationMs: 400,
-    // Se o DNA for monocromático a quente, o hook é P&B (monochrome)
     effect: paletteGene === 'heroi_tragico' || paletteGene === 'martir_esquecido' ? 'monochrome' : 'normal',
     isSilence: false,
     sceneSubject: 'context',
   });
+  globalSceneIdx++;
 
   // 2. Body Scenes — câmera determinada por peso retórico do texto (Onda C)
   for (let idx = 0; idx < script.body.length; idx++) {
@@ -188,23 +239,29 @@ export function planStoryboard(
     const isExilado = paletteGene === 'exilado_que_retorna';
     const isHeroi = paletteGene === 'heroi_tragico';
 
-    const bodyVisualNote = section.visualNote || `Cena ${idx + 1} de futebol`;
-    const weight = classifyRhetoricalWeight(section.content);
-    const camera = resolveCameraMovement(weight, idx);
+    const chunks = chunkTextIntoScenes(section.content);
 
-    scenes.push({
-      id: uuidv4(),
-      text: section.content,
-      visualDescription: bodyVisualNote,
-      cameraMovement: camera.cameraMovement,
-      panZoomSpeed: camera.panZoomSpeed,
-      rhetoricalWeight: weight,
-      transitionIn: idx === 0 ? 'fade' : 'cut',
-      transitionDurationMs: idx === 0 ? 300 : 0,
-      effect: isExilado ? 'sepia' : (isHeroi ? 'warm' : 'normal'),
-      isSilence: false,
-      sceneSubject: classifySceneSubject(bodyVisualNote),
-    });
+    for (let c = 0; c < chunks.length; c++) {
+      const chunkText = chunks[c];
+      const bodyVisualNote = section.visualNote || `Cena ${idx + 1} de futebol`;
+      const weight = classifyRhetoricalWeight(chunkText);
+      const camera = resolveCameraMovement(weight, globalSceneIdx);
+
+      scenes.push({
+        id: uuidv4(),
+        text: chunkText,
+        visualDescription: bodyVisualNote,
+        cameraMovement: camera.cameraMovement,
+        panZoomSpeed: camera.panZoomSpeed,
+        rhetoricalWeight: weight,
+        transitionIn: 'cut',
+        transitionDurationMs: 0,
+        effect: isExilado ? 'sepia' : (isHeroi ? 'warm' : 'normal'),
+        isSilence: false,
+        sceneSubject: classifySceneSubject(bodyVisualNote),
+      });
+      globalSceneIdx++;
+    }
 
     // Silêncio II — O Silêncio da Pergunta (Pausa após uma pergunta existencial)
     if (section.content.trim().endsWith('?')) {
@@ -213,7 +270,7 @@ export function planStoryboard(
         text: '',
         visualDescription: `Pausa dramática (Silêncio II - Pergunta), plano estático da cena anterior`,
         cameraMovement: 'still',
-        panZoomSpeed: 0,          // silêncio: câmera parada absoluta
+        panZoomSpeed: 0,
         rhetoricalWeight: 'normal',
         transitionIn: 'cut',
         transitionDurationMs: 0,
@@ -221,6 +278,7 @@ export function planStoryboard(
         isSilence: true,
         sceneSubject: 'context',
       });
+      globalSceneIdx++;
     }
   }
 
@@ -232,12 +290,13 @@ export function planStoryboard(
     cameraMovement: 'still',
     panZoomSpeed: 0,
     rhetoricalWeight: 'normal',
-    transitionIn: 'fade',
-    transitionDurationMs: 500,
+    transitionIn: 'cut', // fade apenas em abertura/fechamento
+    transitionDurationMs: 0,
     effect: 'monochrome',
     isSilence: true,
     sceneSubject: 'context',
   });
+  globalSceneIdx++;
 
   // 4. CTA / Final Scene — sempre zoom_in @ 1.8: impacto máximo de fechamento
   scenes.push({
@@ -247,12 +306,13 @@ export function planStoryboard(
     cameraMovement: 'zoom_in',
     panZoomSpeed: 1.8,
     rhetoricalWeight: 'critical',
-    transitionIn: 'fade',
+    transitionIn: 'fade', // fechamento
     transitionDurationMs: 300,
     effect: 'normal',
     isSilence: false,
     sceneSubject: 'context',
   });
+  globalSceneIdx++;
 
   // 5. Canon Silence III — fade to black, câmera parada: respirar com a BGM
   scenes.push({
@@ -271,3 +331,4 @@ export function planStoryboard(
 
   return scenes;
 }
+

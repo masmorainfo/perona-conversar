@@ -11,9 +11,15 @@ importers:
       '@zernio/node':
         specifier: ^0.2.296
         version: 0.2.296
+      bullmq:
+        specifier: ^5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      redis:
+        specifier: ^6.1.0
+        version: 6.1.0
     devDependencies:
       '@types/node':
         specifier: ^20.14.0
@@ -50,7 +56,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -84,7 +90,7 @@ importers:
         version: 8.20.0
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -115,7 +121,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -140,7 +146,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       cron:
         specifier: ^4.4.0
         version: 4.4.0
@@ -174,7 +180,7 @@ importers:
         version: link:../../../packages/llm
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -202,7 +208,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -224,7 +230,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -261,7 +267,7 @@ importers:
         version: 0.2.296
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -301,7 +307,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -332,7 +338,7 @@ importers:
         version: 0.2.296
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -363,7 +369,7 @@ importers:
         version: 8.20.0
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -400,7 +406,7 @@ importers:
         version: 8.20.0
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -446,7 +452,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -468,7 +474,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -505,7 +511,7 @@ importers:
         version: 11.0.0
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -533,7 +539,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -558,7 +564,7 @@ importers:
         version: link:../../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^16.0.0
         version: 16.6.1
@@ -592,7 +598,7 @@ importers:
         version: 12.11.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       clsx:
         specifier: ^2.1.0
         version: 2.1.1
@@ -696,7 +702,7 @@ importers:
         version: link:../../packages/types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -727,7 +733,7 @@ importers:
         version: link:../types
       bullmq:
         specifier: ^5.0.0
-        version: 5.79.1
+        version: 5.79.1(redis@6.1.0)
     devDependencies:
       typescript:
         specifier: '*'
@@ -1468,6 +1474,42 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
+
+  '@redis/bloom@6.1.0':
+    resolution: {integrity: sha512-Rzascjd9J9bJsM45T/Z9CTg1QY/B63B6YO8QorLVMeXnbBDsKiSCVR/+GQ061hYPk8FpTzWmPY8tAv2sT+JEtQ==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.1.0
+
+  '@redis/client@6.1.0':
+    resolution: {integrity: sha512-7u1LefkezJF0HESlhO7ZFLEPfyY+NejP3SGv+Z4pGaT3oM5GVVLa0u3f4rDLUrcw+SRo8IlX9Y8JAONeDdg1Ag==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@node-rs/xxhash': ^1.1.0
+      '@opentelemetry/api': '>=1 <2'
+    peerDependenciesMeta:
+      '@node-rs/xxhash':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+
+  '@redis/json@6.1.0':
+    resolution: {integrity: sha512-/GFjQA6bu5pG9ClCJAI5Xx4bNXe7UTpxBBlIupBNTrn1+nY860apGnYJuaSCDV2BmEbTidpa7O2qa28oxKx+rg==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.1.0
+
+  '@redis/search@6.1.0':
+    resolution: {integrity: sha512-kS5agg+3yZbrdrt8omrew7FLCD8eOm7tarG1CROekPBRe+QGDR9aOpnHIQaYsYi6wPRTH70nQiF06AIjgURefQ==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.1.0
+
+  '@redis/time-series@6.1.0':
+    resolution: {integrity: sha512-uIDBtV8MmG/xpJsRqbGSO4iX6ryj37MLMP82lRpFvI7ykAVe5GyqgxigEbU+uZNv9kDPNMKw3dvI/S/J1BNBzA==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.1.0
 
   '@remotion/bundler@4.0.484':
     resolution: {integrity: sha512-ZGTWt7hX9qjeeqRxZyxcgpgEbKgDjqP23RaOFP+hLcvDC8In54BZML68Vgss50BP2Gt2M5bcSLRLZtIDWo1dNw==}
@@ -4048,6 +4090,10 @@ packages:
     resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
     engines: {node: '>=4'}
 
+  redis@6.1.0:
+    resolution: {integrity: sha512-0kvUPM8RHP/ZMa0xYaDTcG5e8tIGW6kz6MToVT0V8iOnk6bkXp2jncGRGe2bZEk41lZwiDspUqjZCSk5ohjcKw==}
+    engines: {node: '>= 20.0.0'}
+
   reflect.getprototypeof@1.0.10:
     resolution: {integrity: sha512-00o4I+DVrefhv+nX0ulyi3biSHCPDe+yLv5o/p6d/UVlirijB8E16FtfwSAi4g3tcqrQ4lRAqQSoFEZJehYEcw==}
     engines: {node: '>= 0.4'}
@@ -5195,6 +5241,26 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
+  '@redis/bloom@6.1.0(@redis/client@6.1.0)':
+    dependencies:
+      '@redis/client': 6.1.0
+
+  '@redis/client@6.1.0':
+    dependencies:
+      cluster-key-slot: 1.1.2
+
+  '@redis/json@6.1.0(@redis/client@6.1.0)':
+    dependencies:
+      '@redis/client': 6.1.0
+
+  '@redis/search@6.1.0(@redis/client@6.1.0)':
+    dependencies:
+      '@redis/client': 6.1.0
+
+  '@redis/time-series@6.1.0(@redis/client@6.1.0)':
+    dependencies:
+      '@redis/client': 6.1.0
+
   '@remotion/bundler@4.0.484(@swc/helpers@0.5.15)(postcss@8.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@remotion/media-parser': 4.0.484
@@ -6211,7 +6277,7 @@ snapshots:
 
   buffer-from@1.1.2: {}
 
-  bullmq@5.79.1:
+  bullmq@5.79.1(redis@6.1.0):
     dependencies:
       cron-parser: 4.9.0
       ioredis: 5.10.1
@@ -6219,6 +6285,8 @@ snapshots:
       node-abort-controller: 3.1.1
       semver: 7.8.1
       tslib: 2.8.1
+    optionalDependencies:
+      redis: 6.1.0
     transitivePeerDependencies:
       - supports-color
 
@@ -8103,6 +8171,17 @@ snapshots:
   redis-parser@3.0.0:
     dependencies:
       redis-errors: 1.2.0
+
+  redis@6.1.0:
+    dependencies:
+      '@redis/bloom': 6.1.0(@redis/client@6.1.0)
+      '@redis/client': 6.1.0
+      '@redis/json': 6.1.0(@redis/client@6.1.0)
+      '@redis/search': 6.1.0(@redis/client@6.1.0)
+      '@redis/time-series': 6.1.0(@redis/client@6.1.0)
+    transitivePeerDependencies:
+      - '@node-rs/xxhash'
+      - '@opentelemetry/api'
 
   reflect.getprototypeof@1.0.10:
     dependencies:

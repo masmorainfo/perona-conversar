@@ -78,6 +78,33 @@ export async function sourceVisual(query: string, sceneSubject?: string): Promis
     console.warn(`[Sourcing] Erro ao buscar no Openverse: ${err}`);
   }
 
+  // 3. Tentar Pexels (se houver chave de API)
+  if (process.env.PEXELS_API_KEY) {
+    try {
+      const pexelsUrl = `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=3`;
+      const res = await fetch(pexelsUrl, {
+        headers: {
+          'Authorization': process.env.PEXELS_API_KEY
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.photos && data.photos.length > 0) {
+          const item = data.photos[0];
+          return {
+            url: item.src.original || item.src.large,
+            source: 'Pexels',
+            license: 'Pexels License (Gratuito)',
+            author: item.photographer,
+            title: item.alt || searchQuery
+          };
+        }
+      }
+    } catch (err) {
+      console.warn(`[Sourcing] Erro ao buscar no Pexels: ${err}`);
+    }
+  }
+
   // Se nenhuma fonte real encontrou, retorna null (fará fallback para IA se configurado no caller)
   console.warn(`[Sourcing] Nenhuma imagem real encontrada para "${searchQuery}".`);
   return null;
