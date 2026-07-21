@@ -398,7 +398,7 @@ export class MemoryProvider {
         }
 
         // Subir para o S3 e atualizar no manifesto
-        const publicAudioUrl = await this.uploadFileToS3(finalLocalPath, 'audio/mpeg');
+        const publicAudioUrl = await this.uploadFileToS3(finalLocalPath, 'video/mp4');
         layout.narrationPath = publicAudioUrl;
         assetUrls[`voiceover_scene_${idx}`] = publicAudioUrl;
 

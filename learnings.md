@@ -9,6 +9,13 @@
 
 ## Incident log (episodic)
 
+### [2026-07-20] Validação de encanamento com manifest incorreto (Fase 0)
+- Incident: O re-render de validação local usou o manifest do Zidane (contendo ebfc no meio do UUID) em vez do ID correto do Neymar (ebfc1302).
+- Root cause: Confusão de UUIDs parciais e falta de verificação explícita do ID do manifest.
+- Rules learned:
+  1. "Critério objetivo reprovado não se reclassifica por argumento estético." (Se a métrica de QA falhar, o status é FAILED, independente de justificativas artísticas/estéticas).
+  2. "Validação por re-render exige confirmação explícita do contentId do manifest antes de renderizar."
+
 ### [2026-07-19] Repetição de tema (Baggio) + "sinal insuficiente" apesar de fontes ativas
 - Root cause: Trends24 falha silenciosamente em produção (spawnSync /bin/sh ENOENT ao chamar Python via execSync); 5 dos 6 sensores do World Observer eram mocks hardcoded (Baggio, Zidane, Ronaldo, Adriano) nunca substituídos por integração real
 - Fix applied: Substituição de execSync por execFileSync; remoção de mocks hardcoded
@@ -21,3 +28,4 @@
 - Proven recurrence (2–3x) → promote the rule into CLAUDE.md and mark the entry retired
 - Remove obsolete entries / ones referencing deleted files
 - Keep the file lean (mirror the ~200-line budget)
+
