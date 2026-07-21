@@ -47,6 +47,13 @@ export class OpportunityEngine {
       SELECT executions, alert_sent FROM system_daily_limits WHERE date_key = $1;
     `, [today]);
 
+    // Check if autonomous engine is paused via env var
+    const maxOppEnv = process.env.CYCLE_MAX_OPPORTUNITIES_PER_CHANNEL;
+    if (maxOppEnv !== undefined && parseInt(maxOppEnv, 10) === 0) {
+      console.log('[Opportunity Engine] ⏸ Cron autônomo pausado (CYCLE_MAX_OPPORTUNITIES_PER_CHANNEL=0). Abortando ciclo.');
+      return;
+    }
+
     if (limitRows[0].executions >= 15) {
       console.log('[Opportunity Engine] 🛑 Limite diário de execuções atingido (15/15). Abortando ciclo.');
       if (!limitRows[0].alert_sent) {
