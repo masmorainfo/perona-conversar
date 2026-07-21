@@ -117,6 +117,9 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
           const isLastAttempt = attempt === maxRetries;
           if (isLastAttempt) {
             console.error(`[LLM] Erro Anthropic FINAL (modelo: ${model}, ${maxRetries} tentativas esgotadas), falling back to mock:`, err?.message || err);
+            if ((options?.task as any) === 'script') {
+              throw new Error(`[LLM] Erro crítico na geração de roteiro pelo LLM (Anthropic): ${err?.message || err}`);
+            }
           } else {
             const backoffMs = attempt * 3000; // 3s, 6s
             console.warn(`[LLM] Erro Anthropic tentativa ${attempt}/${maxRetries} (modelo: ${model}): ${err?.message || err}. Retrying in ${backoffMs}ms...`);
@@ -143,14 +146,21 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
           response_format: options?.jsonMode ? { type: 'json_object' } : undefined,
         });
         return response.choices[0]?.message?.content || '';
-      } catch (err) {
+      } catch (err: any) {
         console.error(`[LLM] Erro (modelo: ${model}), falling back to mock:`, err);
+        if ((options?.task as any) === 'script') {
+          throw new Error(`[LLM] Erro crítico na geração de roteiro pelo LLM (OpenAI): ${err?.message || err}`);
+        }
       }
     }
 
 
     // Mock completion logic matching expected agent JSON shapes
     // Uses task-type routing first (most reliable), then prompt pattern matching as fallback
+    if ((options?.task as any) === 'script' || prompt.includes('roteiro') || prompt.includes('Roteirista')) {
+      throw new Error(`[LLM] Geração de roteiro falhou. Não é permitido retornar o script mock/template.`);
+    }
+
     if (options?.jsonMode) {
       if (options?.task === 'cinematic-review' || prompt.includes('Assinatura Editorial') || prompt.includes('SIGNABLE') || prompt.includes('UNSIGNABLE')) {
         return JSON.stringify({
@@ -175,7 +185,7 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         let facts = [
           'Fato 1: O tema teve um aumento significativo de relevância recente.',
           'Fato 2: Estudos de caso demonstram eficiência aprimorada em contextos práticos.',
-          'Fato 3: Há uma tendência de consolidação neste aspecto.'
+          'Fato 3: Há uma tendência de consolidação neste aspect.'
         ];
         let sources = [
           { title: 'Report', url: 'https://example.com' }

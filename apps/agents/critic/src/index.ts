@@ -33,6 +33,41 @@ async function processCriticJob(job: Job<CriticJobData>) {
   const { contentId, channelId, script, attemptNumber } = job.data;
   console.log(`[Critic Agent] Avaliando roteiro: "${script.title}" (Tentativa: ${attemptNumber})`);
 
+  // ─── Ghost Script Safety Net ──────────────────────────────────────────────
+  const templatePhrases = [
+    "Uma história surpreendente sobre este acontecimento",
+    "A primeira análise revela detalhes profundos",
+    "Depois do momento de glória",
+    "Hoje o legado se mantém vivo",
+    "Como esses fatos mudaram a sua perspectiva"
+  ];
+  const containsTemplate = templatePhrases.some(phrase => {
+    const inHook = script.hook?.includes(phrase);
+    const inCta = script.cta?.includes(phrase);
+    const inBody = script.body?.some((s: any) => s.content?.includes(phrase));
+    return inHook || inCta || inBody;
+  });
+
+  if (containsTemplate) {
+    console.warn(`[Critic Agent] 🚨 Roteiro-fantasma detectado para a unit ${contentId}! Reprovando automaticamente.`);
+    const evaluation = {
+      overallScore: 0.0,
+      approved: false,
+      dimensions: {
+        originality: { score: 0.0, note: "Template de fallback detectado (Roteiro-Fantasma)", isBlocking: true }
+      },
+      blockingIssues: ["Roteiro-fantasma detectado: o roteiro contém partes do template de fallback."],
+      suggestions: [
+        { position: "Geral", issue: "Roteiro-fantasma", recommendation: "Re-escrever do zero sem usar fallbacks." }
+      ],
+      attemptNumber,
+      maxAttempts: 3,
+      evaluatedAt: new Date()
+    };
+    await supervisorQueue.add('CRITIC_RESULT', { contentId, channelId, evaluation });
+    return;
+  }
+
   // Fetch ChannelCore from registry
   const res = await pool.query('SELECT core FROM channel_registry WHERE id = $1', [channelId]);
   if (res.rowCount === 0) {
