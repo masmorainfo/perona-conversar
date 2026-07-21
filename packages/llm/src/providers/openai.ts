@@ -369,7 +369,7 @@ Responda SOMENTE com JSON:
           input: text,
           // NVIDIA nv-embed-v2 requer encoding_format explícito
           ...(this.isNvidia ? { encoding_format: 'float' } : {}),
-        });
+        }, (this.isNvidia ? { extra_body: { input_type: "passage" } } : undefined) as any);
         return response.data[0]?.embedding || [];
       } catch (err) {
         console.error(`[LLM] Embed Error (${embedModel}), falling back to mock:`, err);

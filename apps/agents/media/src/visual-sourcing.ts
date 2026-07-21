@@ -9,8 +9,9 @@ export interface SourcedVisual {
 export async function sourceVisual(query: string, sceneSubject?: string): Promise<SourcedVisual | null> {
   const searchQuery = sceneSubject || query;
   console.log(`[Sourcing] Buscando imagem real para: "${searchQuery}"`);
+  const failures: string[] = [];
 
-  // 1. Tentar Wikimedia Commons (Prioriza CC0 / Domínio Público / CC-BY / CC-BY-SA)
+  // 1. Tentar Wikimedia Commons
   try {
     const wikiUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrsearch=filetype:bitmap|drawing+${encodeURIComponent(searchQuery)}&gsrlimit=5&prop=imageinfo&iiprop=url|extmetadata&origin=*`;
     const res = await fetch(wikiUrl);
@@ -18,8 +19,6 @@ export async function sourceVisual(query: string, sceneSubject?: string): Promis
       const data = await res.json();
       if (data.query && data.query.pages) {
         const pages = Object.values(data.query.pages) as any[];
-        
-        // Ordenar por licença (preferência CC0/PD > CC-BY > CC-BY-SA)
         const getLicenseScore = (extmetadata: any) => {
           if (!extmetadata || !extmetadata.LicenseShortName) return 99;
           const name = extmetadata.LicenseShortName.value.toLowerCase();
@@ -46,11 +45,17 @@ export async function sourceVisual(query: string, sceneSubject?: string): Promis
             author: ext?.Artist?.value ? ext.Artist.value.replace(/<[^>]*>?/gm, '') : 'Desconhecido',
             title: ext?.ObjectName?.value || bestPage.title
           };
+        } else {
+           failures.push('Wikimedia: 0 resultados úteis');
         }
+      } else {
+        failures.push('Wikimedia: 0 resultados úteis');
       }
+    } else {
+      failures.push(`Wikimedia: Erro HTTP ${res.status}`);
     }
   } catch (err) {
-    console.warn(`[Sourcing] Erro ao buscar no Wikimedia Commons: ${err}`);
+    failures.push(`Wikimedia: Erro de requisição`);
   }
 
   // 2. Tentar Openverse
@@ -72,10 +77,14 @@ export async function sourceVisual(query: string, sceneSubject?: string): Promis
           author: item.creator,
           title: item.title
         };
+      } else {
+        failures.push('Openverse: 0 resultados úteis');
       }
+    } else {
+      failures.push(`Openverse: Erro HTTP ${res.status}`);
     }
   } catch (err) {
-    console.warn(`[Sourcing] Erro ao buscar no Openverse: ${err}`);
+    failures.push(`Openverse: Erro de requisição`);
   }
 
   // 3. Tentar Pexels (se houver chave de API)
@@ -98,15 +107,21 @@ export async function sourceVisual(query: string, sceneSubject?: string): Promis
             author: item.photographer,
             title: item.alt || searchQuery
           };
+        } else {
+          failures.push('Pexels: 0 resultados úteis');
         }
+      } else {
+        failures.push(`Pexels: Erro HTTP ${res.status}`);
       }
     } catch (err) {
-      console.warn(`[Sourcing] Erro ao buscar no Pexels: ${err}`);
+      failures.push(`Pexels: Erro de requisição`);
     }
+  } else {
+    failures.push('Pexels: sem chave');
   }
 
-  // Se nenhuma fonte real encontrou, retorna null (fará fallback para IA se configurado no caller)
-  console.warn(`[Sourcing] Nenhuma imagem real encontrada para "${searchQuery}".`);
+  // Se nenhuma fonte real encontrou, loga o caminho da falha
+  console.log(`[Sourcing] ${failures.join(' → ')} → caindo pra geração IA`);
   return null;
 }
 

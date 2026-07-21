@@ -15,7 +15,7 @@ export async function fetchTrends24Signals(): Promise<RawSignalInput[]> {
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
     console.log(`[World Observer] Executing Python scraper: ${pythonCmd} ${pythonScript}`);
     // Run the python script avoiding shell ENOENT
-    const stdout = execFileSync(pythonCmd, ['t3_scraper.py'], { cwd: pythonCwd, encoding: 'utf8', timeout: 15000 });
+    const stdout = execFileSync(pythonCmd, ['t3_scraper.py'], { cwd: pythonCwd, encoding: 'utf8', timeout: 15000, windowsHide: true });
     
     // Find the JSON block
     const startIdx = stdout.indexOf('JSON_START');

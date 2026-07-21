@@ -10,6 +10,7 @@ import time
 import os
 import re
 from collections import defaultdict
+import subprocess
 
 # Import configuration manager
 from config_manager import load_config
@@ -36,11 +37,13 @@ options.add_argument("--disable-dev-shm-usage")  # Address resource limits in co
 
 # Set up Selenium WebDriver with Service
 chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
+creation_flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+
 if chromedriver_path:
-    service = Service(chromedriver_path)
+    service = Service(chromedriver_path, creation_flags=creation_flags)
 else:
     driver_path = ChromeDriverManager().install()
-    service = Service(driver_path)
+    service = Service(driver_path, creation_flags=creation_flags)
 
 if HEADLESS_MODE:
     driver = webdriver.Chrome(service=service, options=options) # Headless mode

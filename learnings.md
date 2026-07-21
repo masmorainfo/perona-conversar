@@ -5,6 +5,8 @@
 - END of session (mandatory wrap-up): record what to avoid, which rule should change, what to do differently
 
 ## Active rules (semantic — always apply)
+- **Operação Destrutiva/Massa**: Operação destrutiva ou em massa no banco de produção exige relatar o estado ANTES, o critério exato e a contagem afetada. Quando o objetivo é auditar, o critério deve ser por CONTEÚDO (ex: frases específicas), não apenas por janela de tempo.
+- **E2E e Anti-Mock**: E2E significa ponta a ponta de verdade: research real → script real → render real. Sem exceção, nem "só em teste". Mock de roteiro fora de arquivos scratch (scripts de teste locais) é terminantemente proibido. Corolário da regra de Proibição Absoluta de Fallbacks com Mock.
 - **Editorial vs. Factual**: Agentes de julgamento editorial não devem fazer verificação factual, assumindo os tópicos sugeridos como reais. Sua função é julgar estritamente a adequação ao CANON KAIRO e a qualidade narrativa. A verificação factual deve ocorrer estritamente na etapa seguinte, pelo Agente de Pesquisa (Research Agent).
 - **Proibição Absoluta de Fallbacks com Mock/Template**: Para tarefas críticas do pipeline de produção (como geração de roteiros), o sistema deve falhar de forma explícita e imediata em vez de retornar dados falsos ou roteiros mock. Mocks que vazam para produção são incidentes graves de integridade do pipeline.
 
