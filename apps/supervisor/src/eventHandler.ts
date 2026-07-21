@@ -506,11 +506,12 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
           let description = script.description || script.hook || '';
           
           // Fetch manifest to append credits from S3 URL
-          if (context.metadata.assetUrls?.storyManifestUrl) {
+          const assetUrls = context.metadata.assetUrls as Record<string, string> | undefined;
+          if (assetUrls?.['storyManifestUrl']) {
             try {
-              const res = await fetch(context.metadata.assetUrls.storyManifestUrl);
+              const res = await fetch(assetUrls['storyManifestUrl']);
               if (res.ok) {
-                const manifest = await res.json();
+                const manifest = (await res.json()) as any;
                 const credits = (manifest.scenes || [])
                   .filter((s: any) => s.layout?.sourcingMetadata)
                   .map((s: any) => {
