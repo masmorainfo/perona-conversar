@@ -91,8 +91,8 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
           console.log(`[LLM] Anthropic chamando modelo=${model} jsonMode=${!!options?.jsonMode} promptLen=${prompt.length} tentativa=${attempt}/${maxRetries}`);
           const startTime = Date.now();
           
-          // Wrap with timeout to prevent infinite hangs
-          const timeoutMs = 60000;
+          // Wrap with timeout to prevent infinite hangs (180s = 3 minutes)
+          const timeoutMs = 180000;
           const response = await Promise.race([
             this.anthropic.messages.create({
               model,
