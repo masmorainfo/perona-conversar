@@ -60,10 +60,14 @@ async function processRenderJob(job: Job<RenderJobData>) {
 
   // --- SUCCESS ---
   // Upload do vídeo para o Zernio S3 para disponibilizar entre containers
-  let videoUrl: string | undefined;
+  let videoUrl: string;
   try {
+    const apiKey = process.env.ZERNIO_API_KEY;
+    if (!apiKey) {
+      throw new Error('ZERNIO_API_KEY não está definida nas variáveis de ambiente');
+    }
     const { default: Zernio } = await import('@zernio/node');
-    const zernio = new (Zernio as any)({ apiKey: process.env.ZERNIO_API_KEY });
+    const zernio = new (Zernio as any)({ apiKey });
     const videoStats = fs.statSync(videoFilePath);
     const videoFilename = path.basename(videoFilePath);
 
@@ -72,38 +76,41 @@ async function processRenderJob(job: Job<RenderJobData>) {
       body: { filename: videoFilename, contentType: 'video/mp4', size: videoStats.size }
     });
     const uploadUrl = presignRes.data?.uploadUrl;
-    videoUrl = presignRes.data?.publicUrl;
+    const publicUrl = presignRes.data?.publicUrl;
 
-    if (uploadUrl && videoUrl) {
-      // Upload via https.request com pipe (garante Content-Length correto)
-      const https = await import('https');
-      const http = await import('http');
-      await new Promise<void>((resolve, reject) => {
-        const parsedUrl = new URL(uploadUrl);
-        const isHttps = parsedUrl.protocol === 'https:';
-        const reqMod = isHttps ? https : http;
-        const req = (reqMod as typeof https).request(
-          {
-            hostname: parsedUrl.hostname,
-            port: parsedUrl.port || (isHttps ? 443 : 80),
-            path: parsedUrl.pathname + parsedUrl.search,
-            method: 'PUT',
-            headers: { 'Content-Type': 'video/mp4', 'Content-Length': videoStats.size },
-          },
-          (res) => {
-            res.resume();
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) resolve();
-            else reject(new Error(`Upload S3 falhou: ${res.statusCode}`));
-          }
-        );
-        req.on('error', reject);
-        fs.createReadStream(videoFilePath).pipe(req);
-      });
-      console.log(`[Render Engine] Vídeo enviado para Zernio: ${videoUrl}`);
+    if (!uploadUrl || !publicUrl) {
+      throw new Error(`Falha ao obter URL pré-assinada do Zernio para ${videoFilename}`);
     }
+
+    // Upload via https.request com pipe (garante Content-Length correto)
+    const https = await import('https');
+    const http = await import('http');
+    await new Promise<void>((resolve, reject) => {
+      const parsedUrl = new URL(uploadUrl);
+      const isHttps = parsedUrl.protocol === 'https:';
+      const reqMod = isHttps ? https : http;
+      const req = (reqMod as typeof https).request(
+        {
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || (isHttps ? 443 : 80),
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: 'PUT',
+          headers: { 'Content-Type': 'video/mp4', 'Content-Length': videoStats.size },
+        },
+        (res) => {
+          res.resume();
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) resolve();
+          else reject(new Error(`Upload S3 PUT falhou com status: ${res.statusCode}`));
+        }
+      );
+      req.on('error', reject);
+      fs.createReadStream(videoFilePath).pipe(req);
+    });
+    videoUrl = publicUrl;
+    console.log(`[Render Engine] ✅ Vídeo enviado com sucesso para Zernio CDN: ${videoUrl}`);
   } catch (uploadErr) {
-    console.warn('[Render Engine] Upload Zernio falhou — Telegram ficará sem vídeo:', uploadErr);
-    videoUrl = undefined;
+    console.error('[Render Engine] 🚨 Upload para Zernio CDN falhou:', uploadErr);
+    throw new Error(`Upload do vídeo para CDN falhou: ${uploadErr instanceof Error ? uploadErr.message : String(uploadErr)}. Card no Telegram exige vídeo público com HTTPS.`);
   }
 
   const resultData: RenderResultData = {

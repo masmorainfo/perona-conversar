@@ -56,15 +56,17 @@ export async function runAudioQA(videoPath: string): Promise<AudioQAResult> {
         maxSilenceDuration = duration;
       }
       
-      if (duration >= 1.0) {
+      if (duration >= 2.5) {
         block = true;
-      } else if (duration >= 0.3 && duration < 1.0) {
         warn = true;
-        // Format time to MM:SS
-        const minutes = Math.floor(currentStart / 60);
-        const seconds = Math.floor(currentStart % 60);
-        const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        warnings.push(`[🚨 Alerta QA: Silêncio de ${duration.toFixed(2)}s detectado no trecho ${timeStr}]`);
+        const mm = Math.floor(currentStart / 60).toString().padStart(2, '0');
+        const ss = Math.floor(currentStart % 60).toString().padStart(2, '0');
+        warnings.push(`[🚨 ERRO QA: Silêncio de ${duration.toFixed(2)}s detectado no trecho ${mm}:${ss}]`);
+      } else if (duration >= 1.0) {
+        warn = true;
+        const mm = Math.floor(currentStart / 60).toString().padStart(2, '0');
+        const ss = Math.floor(currentStart % 60).toString().padStart(2, '0');
+        warnings.push(`[⚠️ Alerta QA: Pausa dramática de ${duration.toFixed(2)}s detectada no trecho ${mm}:${ss}]`);
       }
     }
   }

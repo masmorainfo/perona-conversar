@@ -77,7 +77,10 @@ async function processEditorialJob(job: Job<EditorialJobData>) {
     4. "martir_esquecido"    — Solidão + Legado. Craque que foi eclipsado, esquecido
                                ou nunca recebeu o reconhecimento que merecia.
     5. "momento_impossivel"  — Espanto + Êxtase. Um feito estatisticamente ou
-                               historicamente improvável que desafia a crença.
+                               historicamente improvável, título glorioso ou espetáculo de magia pura.
+                               Ex: Neymar 2011 Ano Mágico, Ronaldinho no Bernabéu, Virada do Anfield.
+                               ATENÇÃO: Conquistas, apogeus, anos mágicos e exibições geniais DEVEM
+                               obrigatoriamente ser classificados como "momento_impossivel", JAMAIS "heroi_tragico".
     
     Pergunta central do Canon: "O que esse momento revela sobre a condição humana?"
     

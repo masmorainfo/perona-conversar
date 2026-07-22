@@ -483,6 +483,7 @@ export class MemoryProvider {
     // Upload manifest to S3 for durability
     const publicManifestUrl = await this.uploadFileToS3(updatedManifestPath, 'application/json');
     assetUrls['storyManifestUrl'] = publicManifestUrl;
+    assetUrls['storyManifest'] = updatedManifestPath;
 
     console.log(`[Memory Provider] ✅ Manifest atualizado com durações reais. Total: ${totalDurationMs}ms (${(totalDurationMs/1000).toFixed(1)}s). Salvo em: ${updatedManifestPath}`);
 

@@ -9,6 +9,7 @@
 - **E2E e Anti-Mock**: E2E significa ponta a ponta de verdade: research real → script real → render real. Sem exceção, nem "só em teste". Mock de roteiro fora de arquivos scratch (scripts de teste locais) é terminantemente proibido. Corolário da regra de Proibição Absoluta de Fallbacks com Mock.
 - **Editorial vs. Factual**: Agentes de julgamento editorial não devem fazer verificação factual, assumindo os tópicos sugeridos como reais. Sua função é julgar estritamente a adequação ao CANON KAIRO e a qualidade narrativa. A verificação factual deve ocorrer estritamente na etapa seguinte, pelo Agente de Pesquisa (Research Agent).
 - **Proibição Absoluta de Fallbacks com Mock/Template**: Para tarefas críticas do pipeline de produção (como geração de roteiros), o sistema deve falhar de forma explícita e imediata em vez de retornar dados falsos ou roteiros mock. Mocks que vazam para produção são incidentes graves de integridade do pipeline.
+- **Proibição de Degradação Silenciosa em Fallback**: Fallback que degrada o produto final sem sinalizar é proibido — degradação silenciosa é falha, não resiliência. Se um renderizador principal (ex: Remotion) falhar, o job deve falhar explicitamente lançando erro, em vez de gerar um MP4 de qualidade inferior em silêncio.
 
 ## Incident log (episodic)
 

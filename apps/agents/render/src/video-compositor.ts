@@ -56,7 +56,8 @@ export async function compositeVideo(
     localServer = http.createServer((req, res) => {
       try {
         const urlParsed = new URL(req.url || '/', `http://${req.headers.host}`);
-        const filePath = urlParsed.searchParams.get('path');
+        const rawPath = urlParsed.searchParams.get('path') || '';
+        const filePath = rawPath.replace(/^file:\/\//, '');
 
         if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
           const ext = path.extname(filePath).toLowerCase();
@@ -89,7 +90,8 @@ export async function compositeVideo(
   });
 
   function toLocalUrl(filePath: string): string {
-    const resolved = path.resolve(filePath);
+    const cleanPath = (filePath || '').replace(/^file:\/\/\/?/, '');
+    const resolved = path.isAbsolute(cleanPath) ? cleanPath : path.resolve(process.cwd(), cleanPath);
     if (!fs.existsSync(resolved)) {
       console.warn(`[Video Compositor] Warning: File not found: ${resolved}`);
       return filePath;
@@ -102,23 +104,23 @@ export async function compositeVideo(
   let totalFrames = 0;
 
   // 1. Tentar ler do Story Manifest se disponível
-  if (assetUrls && assetUrls.storyManifest && fs.existsSync(assetUrls.storyManifest)) {
+  if (assetUrls && assetUrls.storyManifest && fs.existsSync(assetUrls.storyManifest.replace(/^file:\/\/\/?/, ''))) {
+    const cleanManifestPath = assetUrls.storyManifest.replace(/^file:\/\/\/?/, '');
     try {
-      console.log(`[Video Compositor] Carregando Story Manifest de: ${assetUrls.storyManifest}`);
-      const manifestRaw = fs.readFileSync(assetUrls.storyManifest, 'utf-8');
+      console.log(`[Video Compositor] Carregando Story Manifest de: ${cleanManifestPath}`);
+      const manifestRaw = fs.readFileSync(cleanManifestPath, 'utf-8');
       const manifest: RenderManifest = JSON.parse(manifestRaw);
 
       const memoriesDir = path.join(process.cwd(), 'packages/knowledge/memories');
       
-      // Resolução do caminho absoluto da trilha sonora (BGM) para que o Remotion a renderize nativamente
-      // Resolução do caminho absoluto da trilha sonora (BGM) para que o Remotion a renderize nativamente
-      if (manifest.audioContext.bgmUrl) {
-        if (manifest.audioContext.bgmUrl.startsWith('http://') || manifest.audioContext.bgmUrl.startsWith('https://')) {
+      if (manifest.audioContext && manifest.audioContext.bgmUrl) {
+        const cleanBgm = manifest.audioContext.bgmUrl.replace(/^file:\/\/\/?/, '');
+        if (cleanBgm.startsWith('http://') || cleanBgm.startsWith('https://')) {
           // Mantém URL remota
         } else {
-          const bgmPath = path.isAbsolute(manifest.audioContext.bgmUrl)
-            ? manifest.audioContext.bgmUrl
-            : path.join(memoriesDir, manifest.audioContext.bgmUrl);
+          const bgmPath = path.isAbsolute(cleanBgm)
+            ? cleanBgm
+            : path.join(memoriesDir, cleanBgm);
 
           if (fs.existsSync(bgmPath)) {
             manifest.audioContext.bgmUrl = toLocalUrl(bgmPath);
@@ -131,20 +133,22 @@ export async function compositeVideo(
 
       // Converter cada cena (imagem e locução) para usar protocolo http se forem locais, ou manter URL se forem remotas
       for (const scene of manifest.scenes) {
-        if (scene.layout.mediaUrl) {
-          if (scene.layout.mediaUrl.startsWith('http://') || scene.layout.mediaUrl.startsWith('https://')) {
+        if (scene.layout && scene.layout.mediaUrl) {
+          const cleanMedia = scene.layout.mediaUrl.replace(/^file:\/\/\/?/, '');
+          if (cleanMedia.startsWith('http://') || cleanMedia.startsWith('https://')) {
             // Mantém URL remota
-          } else if (fs.existsSync(scene.layout.mediaUrl)) {
-            scene.layout.mediaUrl = toLocalUrl(scene.layout.mediaUrl);
+          } else {
+            scene.layout.mediaUrl = toLocalUrl(cleanMedia);
           }
         }
         
-        const narrationPath = (scene.layout as any).narrationPath;
-        if (narrationPath) {
-          if (narrationPath.startsWith('http://') || narrationPath.startsWith('https://')) {
-            (scene.layout as any).narrationUrl = narrationPath;
-          } else if (fs.existsSync(narrationPath)) {
-            (scene.layout as any).narrationUrl = toLocalUrl(narrationPath);
+        const rawNarrative = (scene.layout as any)?.narrationPath || (scene.layout as any)?.narrationUrl;
+        if (rawNarrative) {
+          const cleanNarr = rawNarrative.replace(/^file:\/\/\/?/, '');
+          if (cleanNarr.startsWith('http://') || cleanNarr.startsWith('https://')) {
+            (scene.layout as any).narrationUrl = cleanNarr;
+          } else {
+            (scene.layout as any).narrationUrl = toLocalUrl(cleanNarr);
           }
         }
 
@@ -250,11 +254,26 @@ export async function compositeVideo(
 
     console.log(`[Video Compositor] Remotion render concluído com sucesso!`);
 
-  } catch (remotionError) {
-    console.warn(`[Video Compositor] Remotion rendering failed. Falling back to FFmpeg compositor:`, remotionError);
+    // --- POST-PROCESSING AUDIO LOUDNORM (-14 LUFS) ---
+    console.log(`[Video Compositor] 🎚️ Aplicando normalização de áudio loudnorm (-14 LUFS)...`);
+    const tempLoudnormPath = outputVideoPath.replace(/\.mp4$/, '_raw.mp4');
+    fs.renameSync(outputVideoPath, tempLoudnormPath);
     
-    // Fallback to FFmpeg compositor
-    await renderWithFFmpeg(contentId, script, assetUrls, outputVideoPath);
+    try {
+      const loudnormCmd = `ffmpeg -nostdin -y -i "${tempLoudnormPath}" -c:v copy -af "loudnorm=I=-14:LRA=11:TP=-1.5" -c:a aac -b:a 192k "${outputVideoPath}"`;
+      await execAsync(loudnormCmd);
+      if (fs.existsSync(tempLoudnormPath)) fs.unlinkSync(tempLoudnormPath);
+      console.log(`[Video Compositor] ✅ Áudio normalizado com sucesso para -14 LUFS!`);
+    } catch (normErr) {
+      console.warn(`[Video Compositor] ⚠️ Falha na pós-normalização loudnorm. Mantendo áudio original:`, normErr);
+      if (fs.existsSync(tempLoudnormPath) && !fs.existsSync(outputVideoPath)) {
+        fs.renameSync(tempLoudnormPath, outputVideoPath);
+      }
+    }
+
+  } catch (remotionError) {
+    console.error(`[Video Compositor] 🚨 Falha crítica no Remotion engine:`, remotionError);
+    throw new Error(`[Video Compositor] Renderização Remotion falhou: ${remotionError instanceof Error ? remotionError.message : String(remotionError)}. Fallback silencioso proibido por regra de integridade de produto.`);
   } finally {
     if (localServer) {
        (localServer as any).close();
@@ -280,8 +299,9 @@ async function renderWithFFmpeg(
   try {
     // 1. Generate video for each section
     for (let idx = 0; idx < script.body.length; idx++) {
-      const audioPath = assetUrls[`voiceover_sec_${idx}`] || assetUrls[`voiceover_scene_${idx}`];
-      const imagePath = assetUrls[`visual_sec_${idx}`] || assetUrls[`visual_scene_${idx}`];
+      const cleanPath = (p: string) => (p || '').replace(/^file:\/\//, '');
+      const audioPath = cleanPath(assetUrls[`voiceover_sec_${idx}`] || assetUrls[`voiceover_scene_${idx}`]);
+      const imagePath = cleanPath(assetUrls[`visual_sec_${idx}`] || assetUrls[`visual_scene_${idx}`]);
       const sectionVideoPath = path.join(tempDir, `section_${idx}.mp4`);
 
       console.log(`[FFmpeg Compositor] Rendering section ${idx} to ${sectionVideoPath}`);
