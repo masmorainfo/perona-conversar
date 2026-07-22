@@ -125,4 +125,4 @@ async function bootstrap() {
   }
 }
 
-
+bootstrap().catch(err => console.error('🚨 Erro no bootstrap do Media Agent:', err));
