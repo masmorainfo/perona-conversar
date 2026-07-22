@@ -209,11 +209,13 @@ const DuotoneFilter: React.FC<{ theme: CanonTheme; id: string }> = ({ theme, id 
   );
 };
 
+// ─── Componentes Visuais (FilmGrain, Vignette) ─────────────────
+
 const FilmGrain: React.FC = () => (
   <AbsoluteFill
     style={{
       backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-      opacity: 0.15,
+      opacity: 0.08,
       pointerEvents: 'none',
       mixBlendMode: 'overlay',
       zIndex: 10,
@@ -221,11 +223,11 @@ const FilmGrain: React.FC = () => (
   />
 );
 
-// Bordas escurecidas que criam profundidade cinematográfica
+// Bordas escurecidas que criam profundidade cinematográfica suave
 const Vignette: React.FC<{ color: string }> = ({ color }) => (
   <AbsoluteFill
     style={{
-      background: `radial-gradient(ellipse at center, transparent 40%, ${color} 100%)`,
+      background: `radial-gradient(ellipse at center, transparent 60%, ${color} 100%)`,
       pointerEvents: 'none',
     }}
   />
@@ -237,9 +239,9 @@ const AtmosphericOverlay: React.FC<{ color: string; opacity: number }> = ({ colo
   <AbsoluteFill
     style={{
       backgroundColor: color,
-      opacity,
+      opacity: Math.min(opacity, 0.08),
       pointerEvents: 'none',
-      mixBlendMode: 'multiply',
+      mixBlendMode: 'soft-light',
     }}
   />
 );
@@ -461,14 +463,14 @@ const SceneFrame: React.FC<{
   }
 
   // 2. Mapear Efeito / Filtro Visual
-  // Apply the duotone SVG filter mapped to the theme
-  let cssFilter = 'url(#canon-duotone) contrast(1.1)';
+  // Preserva a claridade natural das imagens com sutil ajuste de contraste e saturação
+  let cssFilter = 'contrast(1.05) saturate(1.1) brightness(1.0)';
   if (layout.effect === 'monochrome') {
-    cssFilter = 'grayscale(100%) contrast(1.18) brightness(0.95)';
+    cssFilter = 'grayscale(100%) contrast(1.12) brightness(1.0)';
   } else if (layout.effect === 'sepia') {
-    cssFilter = 'sepia(80%) contrast(0.95) brightness(0.90)';
+    cssFilter = 'sepia(40%) contrast(1.02) brightness(1.0)';
   } else if (layout.effect === 'warm') {
-    cssFilter = 'sepia(30%) saturate(1.25) contrast(1.05) brightness(0.95)';
+    cssFilter = 'sepia(20%) saturate(1.20) contrast(1.05) brightness(1.0)';
   }
 
   return (

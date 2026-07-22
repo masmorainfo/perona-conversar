@@ -10,6 +10,7 @@
 - **Editorial vs. Factual**: Agentes de julgamento editorial não devem fazer verificação factual, assumindo os tópicos sugeridos como reais. Sua função é julgar estritamente a adequação ao CANON KAIRO e a qualidade narrativa. A verificação factual deve ocorrer estritamente na etapa seguinte, pelo Agente de Pesquisa (Research Agent).
 - **Proibição Absoluta de Fallbacks com Mock/Template**: Para tarefas críticas do pipeline de produção (como geração de roteiros), o sistema deve falhar de forma explícita e imediata em vez de retornar dados falsos ou roteiros mock. Mocks que vazam para produção são incidentes graves de integridade do pipeline.
 - **Proibição de Degradação Silenciosa em Fallback**: Fallback que degrada o produto final sem sinalizar é proibido — degradação silenciosa é falha, não resiliência. Se um renderizador principal (ex: Remotion) falhar, o job deve falhar explicitamente lançando erro, em vez de gerar um MP4 de qualidade inferior em silêncio.
+- **Precisão das Ferramentas de Medição (Anti-Falso PASSOU)**: Ferramenta de medição precisa corresponder ao critério. `blackdetect` mede preto absoluto (RGB 0,0,0) e não serve para medir escuridão perceptual — use luminância média e percentual de pixels abaixo de limiar (luminância <10% / 26 de 255 em >90% dos pixels). Métrica que não mede o que o critério pede é pior que não medir, porque produz falso PASSOU.
 
 ## Incident log (episodic)
 

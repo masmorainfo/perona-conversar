@@ -4,6 +4,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { analyzeVideoQuality } from './quality-checker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,36 +31,31 @@ async function processQualityJob(job: Job<QualityJobData>) {
   const { contentId, channelId, videoFilePath } = job.data;
   console.log(`[Quality Control Agent] Analisando vídeo: ${videoFilePath}`);
 
-  // Simulating FFmpeg-probe / computer vision checks
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Executa verificação real com FFmpeg + análise perceptual de escuridão
+  const analysis = analyzeVideoQuality(videoFilePath);
 
-  // Mock verification - always approve in this mock version
-  const checklist = {
-    hasAudio: true,
-    hasSubtitles: true,
-    durationWithinRange: true,
-    resolutionMeetsRequirements: true,
-    noBlackFrames: true,
-    audioLevelAcceptable: true
-  };
-
-  const score = 1.0;
-  const approved = true;
+  console.log(`[Quality Control Agent] Métricas calculadas:`, {
+    duracao: `${analysis.metrics.durationSeconds.toFixed(1)}s`,
+    resolucao: `${analysis.metrics.width}x${analysis.metrics.height}`,
+    fps: analysis.metrics.fps,
+    framesEscuros: `${analysis.metrics.darkFramesCount}/${analysis.metrics.totalSampledFrames} (${analysis.metrics.darkFramePercentage.toFixed(1)}%)`,
+    brilhoMedioAmostras: analysis.metrics.frameMeanBrightness.slice(0, 10), // primeiras 10 amostras
+  });
 
   const resultData: QualityResultData = {
     contentId,
     channelId,
-    approved,
-    score,
-    checklist,
+    approved: analysis.approved,
+    score: analysis.score,
+    checklist: analysis.checklist,
   };
 
-  if (!approved) {
-    resultData.reason = "Falhou em testes automatizados de controle de qualidade (ex: sem áudio).";
+  if (!analysis.approved) {
+    resultData.reason = analysis.reason || "Falhou nos critérios automatizados de qualidade.";
   }
 
   await supervisorQueue.add('QUALITY_RESULT', resultData);
-  console.log(`[Quality Control Agent] Análise concluída. Aprovado: ${approved} (Score: ${score})`);
+  console.log(`[Quality Control Agent] Análise concluída. Aprovado: ${analysis.approved} (Score: ${analysis.score})`);
 }
 
 async function bootstrap() {
