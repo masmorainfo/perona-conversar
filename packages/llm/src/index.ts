@@ -6,6 +6,7 @@ export type TaskType =
   | 'classification' // Detecção de tema, categorização — simples e rápido
   | 'embedding'      // Vetorização semântica — modelo especializado
   | 'editorial'      // Análise editorial, aprovação de pauta — raciocínio médio
+  | 'research'       // Pesquisa factual e síntese — raciocínio estruturado
   | 'observer'       // Agrupamento de sinais, Jaccard, clustering — raciocínio médio
   | 'script'         // Geração de roteiro — alta qualidade, criatividade
   | 'humanizer'      // Pós-processamento de roteiro (voz humana PT-BR) — alta qualidade
@@ -20,6 +21,7 @@ export const NVIDIA_TASK_MODELS: Record<TaskType, string> = {
   classification: process.env.NVIDIA_MODEL_CLASSIFICATION || 'meta/llama-3.1-8b-instruct',        // rápido e barato
   embedding:      process.env.NVIDIA_MODEL_EMBEDDING      || 'nvidia/nv-embedqa-e5-v5',             // especializado em embeddings (substituiu nv-embed-v2 descontinuado)
   editorial:      process.env.NVIDIA_MODEL_EDITORIAL      || 'meta/llama-3.3-70b-instruct',        // raciocínio estruturado
+  research:       process.env.NVIDIA_MODEL_EDITORIAL      || 'meta/llama-3.3-70b-instruct',        // raciocínio estruturado
   observer:       process.env.NVIDIA_MODEL_OBSERVER       || 'meta/llama-3.3-70b-instruct',        // raciocínio estruturado
   script:         process.env.NVIDIA_MODEL_SCRIPT         || 'meta/llama-3.3-70b-instruct',        // qualidade criativa (free tier estável)
   humanizer:      process.env.NVIDIA_MODEL_HUMANIZER      || 'meta/llama-3.3-70b-instruct',        // instruções de tom/voz (free tier estável)

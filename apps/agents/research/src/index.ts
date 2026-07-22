@@ -162,7 +162,7 @@ async function processResearchJob(job: Job<ResearchJobData>) {
         }
       `;
 
-      const responseJsonStr = await llm.complete(prompt, { task: 'observer', jsonMode: true, temperature: 0.3 });
+      const responseJsonStr = await llm.complete(prompt, { task: 'research', jsonMode: true, temperature: 0.3 });
       result = JSON.parse(responseJsonStr);
     }
 

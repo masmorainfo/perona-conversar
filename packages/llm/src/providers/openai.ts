@@ -184,7 +184,7 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
           reason: 'O tema possui forte apelo emocional e arquetípico do futebol, alinhado à KAIRO.'
         });
       }
-      if (prompt.includes('pesquisa detalhada') || prompt.includes('Pesquisador') || prompt.includes('pesquise sobre') || prompt.includes('pesquisa sobre')) {
+      if (options?.task === 'research' || prompt.includes('pesquisa detalhada') || prompt.includes('Pesquisador') || prompt.includes('pesquise sobre') || prompt.includes('pesquisa sobre')) {
         let summary = 'Este é um resumo gerado automaticamente sobre o tema solicitado, abordando as principais informações encontradas.';
         let facts = [
           'Fato 1: O tema teve um aumento significativo de relevância recente.',
