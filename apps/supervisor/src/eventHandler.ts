@@ -8,6 +8,7 @@ import { queueName } from '@cos/events';
 import { createActor } from 'xstate';
 import { notify, editTelegramMessage, editTelegramCaption } from '@cos/notifications';
 import path from 'path';
+import fs from 'fs';
 
 // Map of outgoing queues used to dispatch next steps
 const queues = new Map<string, Queue>();
@@ -211,6 +212,27 @@ export async function processEvent(
       const videoUrl = metadata.videoUrl as string | undefined;  // URL pública cross-container
       const videoFilename = videoFile ? path.basename(videoFile) : undefined;
 
+      // Extrair créditos de mídias autênticas do manifesto para o Telegram
+      let mediaCreditsText: string | undefined = undefined;
+      try {
+        const manifestPath = path.resolve(process.cwd(), `tmp/assets/${contentId}/story_manifest.json`);
+        if (fs.existsSync(manifestPath)) {
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          const credits: string[] = [];
+          (manifest.scenes || []).forEach((sc: any, i: number) => {
+            const meta = sc.layout?.sourcingMetadata;
+            if (meta) {
+              credits.push(`• Cena ${i + 1}: "${meta.title}" (${meta.source}, ${meta.license})`);
+            }
+          });
+          if (credits.length > 0) {
+            mediaCreditsText = credits.slice(0, 5).join('\n'); // Limita a 5 linhas para caber no Telegram caption
+          }
+        }
+      } catch (err) {
+        console.warn('[Supervisor] Aviso ao ler créditos do manifesto:', err);
+      }
+
       notify('PENDING_REVIEW', {
         contentId,
         topic,
@@ -223,6 +245,7 @@ export async function processEvent(
         videoFilename,
         videoFile,
         videoUrl,  // URL pública do Zernio S3 — usada pelo Telegram em vez do path local
+        mediaCreditsText,
       }).then(async (result) => {
         if (result?.ok && result.messageId) {
           // Salva o messageId e o tipo de mensagem (vídeo ou texto) nos metadados

@@ -133,40 +133,46 @@ export class MemoryProvider {
    *   'context' → comportamento anterior: busca autêntica → match ou 'ai_visual:<idx>' (ambiente)
    */
   private async resolveVisualSource(
+    topic: string,
     visualDescription: string,
+    sceneText: string,
     sceneIndex: number,
-    sceneSubject: 'subject' | 'context'
+    sceneSubject: 'subject' | 'context',
+    usedUrls: Set<string>
   ): Promise<{ mediaPath: string; isAiFallback: boolean; isAbstraction: boolean; sourcingMetadata?: any }> {
-    // Cena de sujeito: nunca tenta buscar imagem real nem gerar rosto
-    if (sceneSubject === 'subject') {
-      console.log(
-        `[Memory Provider] 🟣 ABSTRAÇÃO cena ${sceneIndex}: sujeito humano — silhueta/símbolo (sem rosto por IA)`
-      );
-      return { mediaPath: `ai_abstraction:${sceneIndex}`, isAiFallback: true, isAbstraction: true };
-    }
-
-    // Cena de contexto: comportamento original (busca autêntica ou IA de ambiente)
+    // 1. Tentar primeiro busca em banco de ativos autênticos locais (se houver)
     const matches = this.findAuthenticAssets(visualDescription);
 
     if (matches.length > 0) {
       const best = matches[0];
       console.log(
-        `[Memory Provider] 🟢 AUTÊNTICO cena ${sceneIndex}: "${best.asset.filename}" ` +
+        `[Memory Provider] 🟢 AUTÊNTICO LOCAL cena ${sceneIndex}: "${best.asset.filename}" ` +
         `(score: ${best.score.toFixed(2)}, tags: [${best.asset.tags.join(', ')}])`
       );
       return { mediaPath: best.fullPath, isAiFallback: false, isAbstraction: false };
     }
 
-    // Tenta sourcing online real (Wikimedia, Openverse)
-    const sourced = await sourceVisual(visualDescription);
+    // 2. Tentar sourcing online real de foto licenciada (Wikimedia, Openverse, Pexels)
+    const sourced = await sourceVisual(topic, visualDescription, sceneText, usedUrls);
     if (sourced) {
-      console.log(`[Memory Provider] 🔵 SOURCING cena ${sceneIndex}: Encontrado via ${sourced.source}`);
+      console.log(
+        `[Memory Provider] 🔵 SOURCING REAL cena ${sceneIndex}: Encontrado via ${sourced.source} (${sourced.license}) | "${sourced.title}"`
+      );
       return { mediaPath: sourced.url, isAiFallback: false, isAbstraction: false, sourcingMetadata: sourced };
     }
 
+    // 3. Se nenhuma foto real autêntica foi encontrada e a cena é de sujeito humano:
+    // Retorna abstração conceitual (silhueta/símbolo) para NUNCA gerar rosto por IA
+    if (sceneSubject === 'subject') {
+      console.log(
+        `[Memory Provider] 🟣 ABSTRAÇÃO cena ${sceneIndex}: sem foto real, sujeito humano — silhueta/símbolo (sem rosto por IA)`
+      );
+      return { mediaPath: `ai_abstraction:${sceneIndex}`, isAiFallback: true, isAbstraction: true };
+    }
+
+    // 4. Fallback final para IA de ambiente/cenário (sem sujeitos humanos)
     console.log(
-      `[Memory Provider] 🟡 FALLBACK IA cena ${sceneIndex}: nenhum match acima de ${MATCH_THRESHOLD} ` +
-      `para "${visualDescription.substring(0, 80)}..."`
+      `[Memory Provider] 🟡 FALLBACK IA AMBIENTE cena ${sceneIndex}: para "${visualDescription.substring(0, 80)}..."`
     );
     return { mediaPath: `ai_visual:${sceneIndex}`, isAiFallback: true, isAbstraction: false };
   }
@@ -197,11 +203,13 @@ export class MemoryProvider {
     contentId: string,
     channelId: string,
     plannedScenes: PlannedScene[],
-    direction: CinematicDirection
+    direction: CinematicDirection,
+    topic: string = ''
   ): Promise<RenderManifest> {
-    console.log(`[Memory Provider] Construindo manifesto conceitual para unit: ${contentId}`);
+    console.log(`[Memory Provider] Construindo manifesto conceitual para unit: ${contentId} (Tópico: "${topic}")`);
 
     const scenes: TechnicalSceneProps[] = [];
+    const usedUrls = new Set<string>();
 
     for (let idx = 0; idx < plannedScenes.length; idx++) {
       const pScene = plannedScenes[idx];
@@ -224,9 +232,12 @@ export class MemoryProvider {
 
       // 2. Resolver Mídia Visual (Autêntica, Abstração ou Fallback IA de ambiente)
       const visualSource = await this.resolveVisualSource(
+        topic,
         pScene.visualDescription,
+        pScene.text,
         idx,
-        pScene.sceneSubject
+        pScene.sceneSubject,
+        usedUrls
       );
       mediaPath = visualSource.mediaPath;
 

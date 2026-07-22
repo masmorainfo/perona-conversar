@@ -46,6 +46,8 @@ export interface EventPayload {
   hook?: string | undefined;
   /** CTA do roteiro */
   cta?: string | undefined;
+  /** Texto formatado de créditos das mídias autênticas */
+  mediaCreditsText?: string | undefined;
 }
 
 let MISSION_CONTROL_URL = process.env['MISSION_CONTROL_URL'] ?? 'http://127.0.0.1:3000';
@@ -97,6 +99,10 @@ export function formatEvent(
         payload.channelSlug ? `📺 ${payload.channelSlug}` : null,
       ].filter(Boolean).join(' · ');
 
+      const creditsLine = payload.mediaCreditsText
+        ? `\n📸 *Créditos de Mídia Autêntica:*\n${escapeMarkdown(payload.mediaCreditsText)}`
+        : null;
+
       return [
         `*KAIRO // NOVA PRODUÇÃO*`,
         ``,
@@ -104,6 +110,7 @@ export function formatEvent(
         hookLine,
         ``,
         metaLine || null,
+        creditsLine,
       ].filter((x): x is string => x !== null).join('\n');
     }
 

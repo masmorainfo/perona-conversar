@@ -53,7 +53,7 @@ async function processStoryboardJob(job: Job<StoryboardJobData>) {
   console.log(`[Storyboard Agent] [Planner] Roteiro dividido em ${plannedScenes.length} batidas.`);
 
   // Layer 3: Memory Provider - Resolução conceitual pura (sem side-effects de IA)
-  const manifest = await memoryProvider.buildConceptManifest(contentId, channelId, plannedScenes, direction);
+  const manifest = await memoryProvider.buildConceptManifest(contentId, channelId, plannedScenes, direction, script.title);
 
   // Escreve o manifesto conceitual inicial no disco
   const manifestPath = path.join(assetsDir, 'story_manifest.json');
