@@ -112,14 +112,14 @@ function happyPathIndex(id: string): number {
 }
 
 // ── Nó customizado ───────────────────────────────────────────────────────────
-interface NodeData {
+interface NodeData extends Record<string, unknown> {
   def: StateDef;
   situation: NodeSituation;
   minutes: number;
   attempts: number;
 }
 
-function StateNode({ data }: NodeProps<NodeData>) {
+function StateNode({ data }: NodeProps<Node<NodeData>>) {
   const { def, situation, minutes, attempts } = data;
   return (
     <div className={`pi-node pi-${situation}`}>
