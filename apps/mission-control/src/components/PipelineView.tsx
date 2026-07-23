@@ -1,295 +1,429 @@
 'use client';
-import React, { useMemo, useState } from 'react';
-import {
-  ReactFlow,
+// ────────────────────────────────────────────────────────────────────────────
+// PipelineView.tsx — Inspetor do pipeline com a máquina de estados completa.
+// Sugestão de destino: apps/mission-control/src/components/PipelineView.tsx
+//
+// Dependências novas:  pnpm add dagre   &&   pnpm add -D @types/dagre
+// (React Flow já existe no projeto; imports abaixo no padrão 'reactflow' v11.
+//  Se o projeto usa '@xyflow/react' v12, só troca a linha de import.)
+//
+// O que este componente entrega:
+//  1. DAG com os 24 estados + loops de falha, auto-layout via dagre
+//     (nada de coordenadas na mão).
+//  2. Temas de nó: concluído / ativo / falha / terminal / pendente.
+//  3. ★ Alerta STALLED: estado não-terminal parado além do limiar pulsa
+//     em laranja com o tempo parado — o recurso que faltou a semana toda.
+//  4. Gaveta (Payload Inspector): erro literal, attemptCounts, filas BullMQ,
+//     timestamps e contador de execuções diárias.
+//  5. Ações "Reexecutar etapa" e "Retroceder": só transições válidas,
+//     modal de confirmação com MOTIVO OBRIGATÓRIO (vira auditoria no backend),
+//     custo de execução visível antes do clique.
+// ────────────────────────────────────────────────────────────────────────────
+
+import React, { useMemo, useState, useCallback } from 'react';
+import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+  Handle,
+  Position,
+  type Node,
+  type Edge,
+  type NodeProps,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import dagre from 'dagre';
+import { STATES, EDGES, isStalled, minutesInState, type StateDef } from '../lib/pipeline-states';
 
-const PIPELINE_STAGES = [
-  { id: 'DISCOVERED',  label: 'Discovered',  x: 50,   y: 150 },
-  { id: 'EVALUATED',   label: 'Evaluated',   x: 220,  y: 150 },
-  { id: 'APPROVED',    label: 'Approved',    x: 390,  y: 150 },
-  { id: 'RESEARCHED',  label: 'Researched',  x: 560,  y: 150 },
-  { id: 'SCRIPTED',    label: 'Scripted',    x: 730,  y: 150 },
-  { id: 'CRITIC_OK',   label: 'Critic Pass', x: 900,  y: 150 },
-  { id: 'PRODUCED',    label: 'Produced',    x: 1070, y: 150 },
-  { id: 'RENDERED',    label: 'Rendered',    x: 1240, y: 150 },
-  { id: 'PENDING_REVIEW', label: 'Pending Review', x: 1410, y: 150 },
-  { id: 'READY_TO_PUBLISH', label: 'Ready Pub', x: 1580, y: 150 },
-  { id: 'PUBLISHED',   label: 'Published',   x: 1750, y: 150 },
+// ── Tipos de entrada ─────────────────────────────────────────────────────────
+// ADAPTE: alinhe com o shape real da unit vindo do seu fetch.
+export interface QueueStat {
+  queue: string;
+  waiting: number;
+  active: number;
+  failed: number;
+}
+
+export interface PipelineUnit {
+  id: string;
+  topic: string;
+  state: string;                        // estado atual (ex.: 'RESEARCHED')
+  lastTransitionAt: string;             // ISO — updated_at da unit
+  attemptCounts?: Record<string, number>; // metadata.attemptCounts
+  lastError?: string | null;            // metadata.lastError (mensagem literal)
+  visitedStates?: string[];             // opcional: histórico; sem ele, infere pelo caminho feliz
+  executionsToday: number;              // consumo do limite diário
+  executionsLimit: number;              // ex.: 15
+  queueStats?: QueueStat[];             // snapshot BullMQ (opcional)
+}
+
+interface Props {
+  unit: PipelineUnit;
+  /** Token de operador validado pela rota /api/jobs/retry.
+   *  ADAPTE: injete do seu mecanismo de sessão — nunca hardcode. */
+  operatorToken: string;
+  /** Chamado após ação manual bem-sucedida (para refetch). */
+  onActionDone?: () => void;
+}
+
+// ── Layout automático (dagre) ────────────────────────────────────────────────
+const NODE_W = 196;
+const NODE_H = 64;
+
+function layoutGraph(): { nodes: Array<{ id: string; x: number; y: number }> } {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({ rankdir: 'TB', nodesep: 34, ranksep: 46 });
+  g.setDefaultEdgeLabel(() => ({}));
+  Object.keys(STATES).forEach((id) => g.setNode(id, { width: NODE_W, height: NODE_H }));
+  EDGES.forEach(([s, t]) => g.setEdge(s, t));
+  dagre.layout(g);
+  return {
+    nodes: Object.keys(STATES).map((id) => {
+      const n = g.node(id);
+      return { id, x: n.x - NODE_W / 2, y: n.y - NODE_H / 2 };
+    }),
+  };
+}
+
+// ── Tema visual por situação do nó ───────────────────────────────────────────
+type NodeSituation = 'done' | 'active' | 'active-stalled' | 'failed-past' | 'terminal' | 'pending';
+
+function situationFor(def: StateDef, unit: PipelineUnit): NodeSituation {
+  if (def.id === unit.state) {
+    return isStalled(def.id, unit.lastTransitionAt) ? 'active-stalled' : 'active';
+  }
+  const attempts = unit.attemptCounts?.[def.id] ?? 0;
+  if (def.kind === 'fail' && attempts > 0) return 'failed-past'; // pipeline se recuperou aqui
+  const visited = unit.visitedStates?.includes(def.id)
+    ?? happyPathIndex(def.id) < happyPathIndex(unit.state); // fallback: ordem do caminho feliz
+  if (def.kind === 'terminal-negative') return 'terminal';
+  return visited ? 'done' : 'pending';
+}
+
+const HAPPY_ORDER = [
+  'DISCOVERED','EVALUATED','APPROVED','RESEARCHED','SCRIPTED','CRITIC_OK',
+  'STORYBOARD_PLANNED','PRODUCED','RENDERED','QC_APPROVED','CINEMATIC_REVIEWING',
+  'PENDING_REVIEW','READY_TO_PUBLISH','PUBLISHED','ANALYZED','LEARNED',
 ];
-
-const STAGE_ORDER = PIPELINE_STAGES.map((s) => s.id);
-
-const EDGES = PIPELINE_STAGES.slice(0, -1).map((s, i) => ({
-  id: `e${i}`,
-  source: s.id,
-  target: PIPELINE_STAGES[i + 1].id,
-  style: { stroke: 'var(--color-border)', strokeWidth: 1.5 },
-  animated: false,
-}));
-
-function buildNodes(activeUnit: any, selectedUnitState: string) {
-  const activeState = activeUnit?.state ?? '';
-  const activeIndex = STAGE_ORDER.indexOf(activeState);
-
-  return PIPELINE_STAGES.map((stage, i) => {
-    const isCurrent = stage.id === activeState;
-    const isPast = i < activeIndex;
-    const isFuture = i > activeIndex;
-
-    let bg = 'var(--color-surface-2)';
-    let border = '1px solid var(--color-border)';
-    let color = 'var(--color-muted-foreground)';
-
-    if (isCurrent) {
-      bg = 'var(--color-surface-1)';
-      border = '1.5px solid var(--color-accent)';
-      color = 'var(--color-accent)';
-    } else if (isPast) {
-      bg = 'var(--color-background)';
-      border = '1px solid var(--color-success)';
-      color = 'var(--color-success)';
-    }
-
-    return {
-      id: stage.id,
-      position: { x: stage.x, y: stage.y },
-      data: {
-        label: (
-          <div className="flex flex-col items-center gap-1">
-            <span className="font-bold text-[11px]">{stage.label}</span>
-            {isCurrent && (
-              <span className="text-[8px] bg-accent/20 text-accent px-1.5 py-0.5 rounded font-mono animate-pulse tracking-wider">
-                ● ACTIVE
-              </span>
-            )}
-            {isPast && (
-              <span className="text-[8px] text-success font-mono tracking-wider">✓ DONE</span>
-            )}
-            {isFuture && (
-              <span className="text-[8px] text-muted-foreground font-mono tracking-wider">PENDING</span>
-            )}
-          </div>
-        ),
-      },
-      style: { background: bg, color, border, padding: '10px', width: 130, borderRadius: '6px', cursor: 'pointer' },
-    };
-  });
+function happyPathIndex(id: string): number {
+  const i = HAPPY_ORDER.indexOf(id);
+  return i === -1 ? -1 : i;
 }
 
-function buildEdges(activeUnit: any) {
-  const activeIndex = STAGE_ORDER.indexOf(activeUnit?.state ?? '');
-  return EDGES.map((e, i) => ({
-    ...e,
-    animated: i === activeIndex - 1,
-    style: {
-      stroke: i < activeIndex ? 'var(--color-success)' : i === activeIndex - 1 ? 'var(--color-accent)' : 'var(--color-border)',
-      strokeWidth: i === activeIndex - 1 ? 2 : 1.5,
-    },
-  }));
+// ── Nó customizado ───────────────────────────────────────────────────────────
+interface NodeData {
+  def: StateDef;
+  situation: NodeSituation;
+  minutes: number;
+  attempts: number;
 }
 
-function formatSafeDate(dateStr: string | undefined): string {
-  if (!dateStr) return 'N/A';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime()) || d.getFullYear() > 2100 || d.getFullYear() < 2000) {
-      return `⚠️ Data inválida (${dateStr})`;
-    }
-    return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  } catch {
-    return `⚠️ Data inválida (${dateStr})`;
-  }
+function StateNode({ data }: NodeProps<NodeData>) {
+  const { def, situation, minutes, attempts } = data;
+  return (
+    <div className={`pi-node pi-${situation}`}>
+      <Handle type="target" position={Position.Top} className="pi-handle" />
+      <div className="pi-node-label">
+        {situation === 'failed-past' || def.kind === 'fail' ? '⚠️ ' : ''}
+        {def.label}
+      </div>
+      {situation === 'active' && <div className="pi-badge">● ATIVO · {minutes} min</div>}
+      {situation === 'active-stalled' && <div className="pi-badge pi-badge-stall">⏱ PARADO HÁ {minutes} MIN</div>}
+      {attempts > 0 && situation !== 'active' && situation !== 'active-stalled' && (
+        <div className="pi-badge pi-badge-attempts">{attempts}× tentativas</div>
+      )}
+      <Handle type="source" position={Position.Bottom} className="pi-handle" />
+    </div>
+  );
 }
+const nodeTypes = { state: StateNode };
 
-function buildPayload(unit: any, nodeId: string) {
-  if (!unit) return { info: 'Nenhum job ativo selecionado.' };
-  const meta = unit.metadata ?? {};
+// ── Componente principal ─────────────────────────────────────────────────────
+export default function PipelineView({ unit, operatorToken, onActionDone }: Props) {
+  const [selected, setSelected] = useState<StateDef | null>(null);
+  const [confirming, setConfirming] = useState<{ action: 'retry' | 'rollback'; target?: string } | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
-  switch (nodeId) {
-    case 'DISCOVERED':
-      return { topic: unit.topic, channel: unit.channel_name, insertedAt: formatSafeDate(unit.created_at) };
-    case 'EVALUATED':
-      return meta.editorialScore !== undefined
-        ? {
-            score: `${(meta.editorialScore * 100).toFixed(0)}%`,
-            direction: meta.editorialDirection ?? 'N/A',
-            canonArchetype: meta.canonArchetype ?? 'N/A',
-            canonTargetEmotion: meta.canonTargetEmotion ?? 'N/A',
-          }
-        : { info: 'Aguardando dado real do Editorial Agent.' };
-    case 'APPROVED':
-      return { topic: unit.topic, state: unit.state, approvedAt: formatSafeDate(unit.updated_at) };
-    case 'RESEARCHED':
-      return meta.researchPackage
-        ? {
-            query: meta.researchPackage.query,
-            factsCount: meta.researchPackage.facts?.length ?? 0,
-            topFacts: meta.researchPackage.facts?.slice(0, 2),
-            sourcesCount: meta.researchPackage.sources?.length ?? 0,
-          }
-        : { info: 'Pacote de pesquisa ainda não disponível.' };
-    case 'SCRIPTED':
-      return meta.script
-        ? {
-            hookPreview: meta.script.hook?.slice(0, 120) + '...',
-            durationTarget: meta.script.estimatedDurationSeconds ?? meta.script.durationSeconds,
-            sectionsCount: meta.script.sections?.length ?? 0,
-          }
-        : { info: 'Script ainda não gerado.' };
-    case 'CRITIC_OK':
-      return meta.criticEvaluation
-        ? {
-            approved: meta.criticEvaluation.approved ?? true,
-            feedback: meta.criticEvaluation.feedback ?? meta.criticEvaluation.summary ?? 'Aprovado pelo Critic',
-          }
-        : { info: 'Revisão do Critic ainda não disponível.' };
-    case 'PRODUCED':
-      return meta.assetUrls
-        ? {
-            assetCount: Object.keys(meta.assetUrls).length,
-            assets: Object.keys(meta.assetUrls).slice(0, 5),
-            storyManifest: meta.storyManifestPath ? '✓ Presente' : '✗ Ausente',
-          }
-        : { info: 'Pacote de mídia ainda não gerado.' };
-    case 'RENDERED':
-      return meta.videoFile
-        ? {
-            videoFile: meta.videoFile,
-            qaWarnings: meta.qaWarnings ?? 'Nenhum',
-          }
-        : { info: 'Saída de renderização ainda não disponível.' };
-    case 'PENDING_REVIEW':
+  const { nodes, edges } = useMemo(() => {
+    const layout = layoutGraph();
+    const nodes: Node<NodeData>[] = layout.nodes.map(({ id, x, y }) => {
+      const def = STATES[id];
       return {
-        qcScore: meta.qcScore ?? 'N/A',
-        qcChecklist: meta.qcChecklist ?? 'N/A',
-        cinematicEvaluation: meta.cinematicEvaluation
-          ? { approved: meta.cinematicEvaluation.approved, feedback: meta.cinematicEvaluation.feedback ?? meta.cinematicEvaluation.summary }
-          : 'N/A',
-        editorialScore: meta.editorialScore !== undefined ? `${(meta.editorialScore * 100).toFixed(0)}%` : 'N/A',
+        id,
+        type: 'state',
+        position: { x, y },
+        data: {
+          def,
+          situation: situationFor(def, unit),
+          minutes: id === unit.state ? minutesInState(unit.lastTransitionAt) : 0,
+          attempts: unit.attemptCounts?.[id] ?? 0,
+        },
       };
-    case 'READY_TO_PUBLISH':
-      return { info: 'Pronto para publicação.' };
-    case 'PUBLISHED':
-      return meta.publicationResults
-        ? {
-            platforms: (meta.publicationResults as any[]).map((r: any) => ({
-              platform: r.platform,
-              success: r.success,
-              url: r.platformUrl ?? 'N/A',
-            })),
-          }
-        : { info: 'Publicação concluída.' };
-    default:
-      return { info: 'Selecione um nó do pipeline para inspecionar seus metadados.' };
-  }
-}
+    });
+    const edges: Edge[] = EDGES.map(([s, t]) => {
+      const isFailEdge = STATES[t].kind === 'fail' || STATES[t].kind === 'terminal-negative';
+      return {
+        id: `${s}->${t}`,
+        source: s,
+        target: t,
+        animated: s === unit.state,
+        className: isFailEdge ? 'pi-edge-fail' : 'pi-edge',
+      };
+    });
+    return { nodes, edges };
+  }, [unit]);
 
-export function PipelineView({ contentUnits }: { contentUnits: any[] }) {
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [selectedUnitId, setSelectedUnitId] = useState<string>('');
+  const runAction = useCallback(async () => {
+    if (!confirming || reason.trim().length < 5) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/jobs/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-operator-token': operatorToken },
+        body: JSON.stringify({
+          contentId: unit.id,
+          currentState: unit.state,
+          action: confirming.action,
+          targetState: confirming.target,
+          reason: reason.trim(),
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+      setFeedback(`✅ ${body.message ?? 'Ação registrada e enfileirada.'}`);
+      setConfirming(null);
+      setReason('');
+      onActionDone?.();
+    } catch (err: any) {
+      setFeedback(`🚨 Falhou: ${err.message}`); // erro literal, sem maquiagem
+    } finally {
+      setBusy(false);
+    }
+  }, [confirming, reason, unit, operatorToken, onActionDone]);
 
-  // Primeiro ativo, depois todos como selecionável
-  const activeUnit = useMemo(() => {
-    if (selectedUnitId) return contentUnits.find((cu) => cu.id === selectedUnitId) ?? contentUnits[0];
-    return contentUnits.find((cu) => cu.state !== 'PUBLISHED' && cu.state !== 'ABANDONED' && cu.state !== 'REJECTED') ?? contentUnits[0];
-  }, [contentUnits, selectedUnitId]);
-
-  const nodes = useMemo(() => buildNodes(activeUnit, selectedNode ?? ''), [activeUnit, selectedNode]);
-  const edges = useMemo(() => buildEdges(activeUnit), [activeUnit]);
-  const payload = useMemo(() => buildPayload(activeUnit, selectedNode ?? ''), [activeUnit, selectedNode]);
+  const current = STATES[unit.state];
+  const executionsLeft = unit.executionsLimit - unit.executionsToday;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Job Selector */}
-      {contentUnits.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Inspecionar Job:</span>
-          {contentUnits.slice(0, 8).map((cu) => (
-            <button
-              key={cu.id}
-              onClick={() => { setSelectedUnitId(cu.id); setSelectedNode(null); }}
-              className={`text-[10px] font-mono px-2.5 py-1 rounded border transition-all ${
-                (activeUnit?.id === cu.id)
-                  ? 'border-accent/40 bg-surface-1 text-accent'
-                  : 'border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-              }`}
-            >
-              {cu.topic.slice(0, 35)}{cu.topic.length > 35 ? '…' : ''}{' '}
-              <span className="opacity-50">({cu.state})</span>
-            </button>
-          ))}
-        </div>
+    <div className="pi-root">
+      <PipelineStyles />
+
+      <div className="pi-canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodeClick={(_, node) => setSelected(STATES[node.id])}
+          fitView
+          minZoom={0.2}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={24} size={1} />
+          <MiniMap pannable zoomable className="pi-minimap" />
+          <Controls />
+        </ReactFlow>
+      </div>
+
+      {/* ── Gaveta: Payload Inspector ─────────────────────────────────────── */}
+      {selected && (
+        <aside className="pi-drawer" aria-label={`Detalhes do estado ${selected.label}`}>
+          <header className="pi-drawer-head">
+            <h3>{selected.label}</h3>
+            <button className="pi-x" onClick={() => setSelected(null)} aria-label="Fechar">✕</button>
+          </header>
+
+          <dl className="pi-meta">
+            <dt>Unit</dt><dd className="pi-mono">{unit.id}</dd>
+            <dt>Estado atual da unit</dt><dd>{current?.label ?? unit.state}</dd>
+            <dt>Nesse estado há</dt><dd>{minutesInState(unit.lastTransitionAt)} min</dd>
+            <dt>Tentativas ({selected.id})</dt><dd>{unit.attemptCounts?.[selected.id] ?? 0}</dd>
+          </dl>
+
+          {unit.lastError && (
+            <section className="pi-error">
+              <h4>Último erro (literal)</h4>
+              <pre>{unit.lastError}</pre>
+            </section>
+          )}
+
+          {unit.queueStats && unit.queueStats.length > 0 && (
+            <section>
+              <h4>Filas BullMQ</h4>
+              <table className="pi-queues">
+                <thead><tr><th>fila</th><th>esperando</th><th>ativos</th><th>falhos</th></tr></thead>
+                <tbody>
+                  {unit.queueStats.map((q) => (
+                    <tr key={q.queue} className={q.failed > 0 ? 'pi-row-bad' : ''}>
+                      <td>{q.queue}</td><td>{q.waiting}</td><td>{q.active}</td><td>{q.failed}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {/* Ações só aparecem no nó do estado ATUAL — agir em outro nó não faz sentido */}
+          {selected.id === unit.state && (
+            <section className="pi-actions">
+              <h4>Ações do operador</h4>
+              <p className="pi-cost">
+                Execuções hoje: <b>{unit.executionsToday}/{unit.executionsLimit}</b>
+                {' '}({executionsLeft} restantes — cada ação abaixo consome 1)
+              </p>
+
+              {current?.retryQueue && (
+                <button
+                  className="pi-btn"
+                  disabled={executionsLeft <= 0}
+                  onClick={() => setConfirming({ action: 'retry' })}
+                >
+                  Reexecutar etapa atual
+                </button>
+              )}
+
+              {current?.rollbackTargets.map((t) => (
+                <button
+                  key={t}
+                  className="pi-btn pi-btn-ghost"
+                  disabled={executionsLeft <= 0}
+                  onClick={() => setConfirming({ action: 'rollback', target: t })}
+                >
+                  Retroceder para {STATES[t]?.label ?? t}
+                </button>
+              ))}
+
+              {executionsLeft <= 0 && (
+                <p className="pi-warn">Limite diário de execuções atingido. Ações liberam no próximo ciclo.</p>
+              )}
+            </section>
+          )}
+
+          {feedback && <p className="pi-feedback">{feedback}</p>}
+        </aside>
       )}
 
-      <div className="flex gap-6">
-        {/* React Flow Panel */}
-        <div className="flex-1 h-[480px] border border-border bg-card rounded-lg overflow-hidden flex flex-col">
-          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-mono font-semibold text-accent uppercase tracking-wider">Pipeline Inspector // React Flow</h3>
-              <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
-                {activeUnit
-                  ? `Job: "${activeUnit.topic}" · Estado atual: ${activeUnit.state}`
-                  : 'Nenhum job encontrado. Injete um tema para começar.'}
-              </p>
-            </div>
-            <span className="text-[9px] text-muted-foreground font-mono bg-surface-2 border border-border px-2 py-1 rounded">
-              Clique num nó para inspecionar
-            </span>
-          </div>
-
-          <div className="flex-1">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodeClick={(_evt, node) => setSelectedNode(node.id)}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background color="#1e1e2e" gap={20} size={1} />
-              <Controls showInteractive={false} />
-              <MiniMap
-                nodeColor={(n) => {
-                  const s = n.style as any;
-                  return s?.background ?? 'var(--color-surface-2)';
-                }}
-                style={{ background: 'var(--color-background)', border: '1px solid var(--color-border)' }}
+      {/* ── Modal de confirmação com motivo obrigatório ───────────────────── */}
+      {confirming && (
+        <div className="pi-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="pi-modal">
+            <h3>
+              {confirming.action === 'retry'
+                ? `Reexecutar a etapa "${current?.label}"`
+                : `Retroceder para "${STATES[confirming.target!]?.label}"`}
+            </h3>
+            <p>
+              Isso injeta um <b>evento na máquina de estados</b> (nunca reset direto no banco),
+              consome <b>1 execução</b> do limite diário e fica registrado na auditoria com o seu motivo.
+            </p>
+            <label>
+              Motivo (obrigatório, mín. 5 caracteres)
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Ex.: worker de script não consumiu o job após deploy; log mostra fila vazia"
+                rows={3}
               />
-            </ReactFlow>
+            </label>
+            <div className="pi-modal-btns">
+              <button className="pi-btn pi-btn-ghost" onClick={() => { setConfirming(null); setReason(''); }}>
+                Cancelar
+              </button>
+              <button className="pi-btn" disabled={busy || reason.trim().length < 5} onClick={runAction}>
+                {busy ? 'Enviando…' : 'Confirmar e registrar'}
+              </button>
+            </div>
           </div>
         </div>
-
-        {/* Payload Inspector Drawer */}
-        <div className={`w-72 border border-border bg-card rounded-lg p-5 flex flex-col gap-4 font-mono text-xs transition-all duration-300 ${selectedNode ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-          <div className="flex justify-between items-center border-b border-border pb-3">
-            <div>
-              <span className="font-bold text-foreground uppercase tracking-wider text-[11px]">{selectedNode ?? '—'}</span>
-              <p className="text-[9px] text-muted-foreground mt-0.5">Payload da Fase</p>
-            </div>
-            {selectedNode && (
-              <button onClick={() => setSelectedNode(null)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            <pre className="bg-surface-2 border border-border rounded-md p-3 text-[10px] text-foreground/90 whitespace-pre-wrap leading-relaxed">
-              {JSON.stringify(payload, null, 2)}
-            </pre>
-          </div>
-
-          {activeUnit?.metadata && selectedNode && (
-            <div className="text-[9px] text-muted-foreground border-t border-border pt-3">
-              Fonte: Postgres · campo <span className="text-accent">metadata</span> do content_unit
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
+  );
+}
+
+// ── Estilos (escopados com prefixo pi-, herdam o tema via CSS vars) ─────────
+function PipelineStyles() {
+  return (
+    <style>{`
+      .pi-root { position: relative; width: 100%; height: 100%; min-height: 640px; }
+      .pi-canvas { position: absolute; inset: 0; }
+
+      .pi-node {
+        width: ${NODE_W}px; min-height: ${NODE_H}px; padding: 10px 12px;
+        border-radius: 10px; border: 1.5px solid var(--pi-border, #3a3f4a);
+        background: var(--pi-node-bg, #14161c); color: var(--pi-fg, #e8eaf0);
+        font: 600 13px/1.3 var(--pi-font, inherit); text-align: center;
+      }
+      .pi-node-label { display: block; }
+      .pi-handle { opacity: 0; }
+
+      .pi-done            { border-color: var(--pi-ok, #2f9e6e); background: color-mix(in srgb, var(--pi-ok, #2f9e6e) 12%, var(--pi-node-bg, #14161c)); }
+      .pi-active          { border-color: var(--pi-active, #d9a441); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pi-active, #d9a441) 35%, transparent); animation: pi-pulse 1.6s ease-in-out infinite; }
+      .pi-active-stalled  { border-color: var(--pi-stall, #e8722c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pi-stall, #e8722c) 45%, transparent); animation: pi-pulse 0.9s ease-in-out infinite; }
+      .pi-failed-past     { border-color: var(--pi-bad, #d64545); background: color-mix(in srgb, var(--pi-bad, #d64545) 14%, var(--pi-node-bg, #14161c)); }
+      .pi-terminal        { border-color: #4a4f58; color: #8a8f9a; background: #101216; }
+      .pi-pending         { opacity: .45; }
+
+      @keyframes pi-pulse { 50% { box-shadow: 0 0 0 7px transparent; } }
+      @media (prefers-reduced-motion: reduce) {
+        .pi-active, .pi-active-stalled { animation: none; }
+      }
+
+      .pi-badge { margin-top: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+                  color: var(--pi-active, #d9a441); }
+      .pi-badge-stall { color: var(--pi-stall, #e8722c); }
+      .pi-badge-attempts { color: var(--pi-bad, #d64545); }
+
+      .pi-edge path { stroke: var(--pi-border, #3a3f4a); }
+      .pi-edge-fail path { stroke: var(--pi-bad, #d64545); stroke-dasharray: 5 4; }
+
+      .pi-drawer {
+        position: absolute; top: 0; right: 0; bottom: 0; width: 380px; overflow-y: auto;
+        background: var(--pi-panel, #0f1116); border-left: 1px solid var(--pi-border, #3a3f4a);
+        color: var(--pi-fg, #e8eaf0); padding: 18px; z-index: 8;
+      }
+      .pi-drawer-head { display: flex; justify-content: space-between; align-items: center; }
+      .pi-drawer h3 { margin: 0; font-size: 16px; }
+      .pi-drawer h4 { margin: 18px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; opacity: .75; }
+      .pi-x { background: none; border: 0; color: inherit; font-size: 16px; cursor: pointer; }
+
+      .pi-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; margin-top: 12px; }
+      .pi-meta dt { opacity: .6; }
+      .pi-mono { font-family: ui-monospace, monospace; font-size: 11.5px; word-break: break-all; }
+
+      .pi-error pre {
+        background: color-mix(in srgb, var(--pi-bad, #d64545) 12%, #000);
+        border: 1px solid var(--pi-bad, #d64545); border-radius: 8px;
+        padding: 10px; font-size: 11.5px; white-space: pre-wrap; word-break: break-word;
+      }
+
+      .pi-queues { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .pi-queues th, .pi-queues td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--pi-border, #3a3f4a); }
+      .pi-row-bad td { color: var(--pi-bad, #d64545); font-weight: 700; }
+
+      .pi-actions .pi-btn { display: block; width: 100%; margin-top: 8px; }
+      .pi-cost { font-size: 12.5px; }
+      .pi-warn { font-size: 12px; color: var(--pi-stall, #e8722c); }
+      .pi-feedback { margin-top: 14px; font-size: 13px; white-space: pre-wrap; }
+
+      .pi-btn {
+        padding: 9px 14px; border-radius: 8px; border: 1px solid var(--pi-active, #d9a441);
+        background: var(--pi-active, #d9a441); color: #14161c; font-weight: 700; cursor: pointer;
+      }
+      .pi-btn:disabled { opacity: .45; cursor: not-allowed; }
+      .pi-btn-ghost { background: transparent; color: var(--pi-fg, #e8eaf0); border-color: var(--pi-border, #3a3f4a); }
+
+      .pi-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 40; }
+      .pi-modal { width: min(480px, 92vw); background: var(--pi-panel, #0f1116); color: var(--pi-fg, #e8eaf0);
+                  border: 1px solid var(--pi-border, #3a3f4a); border-radius: 12px; padding: 20px; }
+      .pi-modal h3 { margin-top: 0; }
+      .pi-modal label { display: block; font-size: 12.5px; margin-top: 10px; }
+      .pi-modal textarea { width: 100%; margin-top: 6px; border-radius: 8px; padding: 8px;
+                           background: #14161c; color: inherit; border: 1px solid var(--pi-border, #3a3f4a); }
+      .pi-modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
+      .pi-minimap { background: var(--pi-panel, #0f1116) !important; }
+    `}</style>
   );
 }

@@ -152,8 +152,9 @@ export class MemoryProvider {
       return { mediaPath: best.fullPath, isAiFallback: false, isAbstraction: false };
     }
 
-    // 2. Tentar sourcing online real de foto licenciada (Wikimedia, Openverse, Pexels)
-    const sourced = await sourceVisual(topic, visualDescription, sceneText, usedUrls);
+    // 2. Tentar sourcing online real de foto licenciada (Wikimedia, Openverse, Pexels, Google CSE)
+    const isSubjectScene = sceneSubject === 'subject';
+    const sourced = await sourceVisual(topic, visualDescription, sceneText, usedUrls, isSubjectScene);
     if (sourced) {
       console.log(
         `[Memory Provider] 🔵 SOURCING REAL cena ${sceneIndex}: Encontrado via ${sourced.source} (${sourced.license}) | "${sourced.title}"`

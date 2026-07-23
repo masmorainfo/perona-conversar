@@ -63,14 +63,64 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
       const isTest = process.env.NODE_ENV === 'test' || process.env.TEST_MODE === 'true';
       const config: any = { 
         apiKey: openAiKey, 
-        timeout: isTest ? 5000 : 120000, 
-        maxRetries: isTest ? 0 : 1 
+        timeout: isTest ? 5000 : 180000, 
+        maxRetries: isTest ? 0 : 3 
       };
       if (url) config.baseURL = url;
       this.openai = new OpenAI(config);
       console.log(`[LLM] Modo ${this.isAnthropic ? 'Secundário' : 'Primário'}: ${this.isNvidia ? '🟢 NVIDIA NIM' : '🔵 OpenAI'} | Modelo padrão: ${this.isNvidia ? NVIDIA_DEFAULT_CHAT_MODEL : OPENAI_DEFAULT_CHAT_MODEL}`);
     } else if (!this.isAnthropic) {
       console.warn('⚠️ OpenAIProvider running in MOCK mode (no API key provided)');
+    }
+  }
+
+  async completeVision(prompt: string, imageUrl: string, options?: CompletionOptions): Promise<string> {
+    const forceMock = process.env.FORCE_MOCK_LLM === 'true';
+    if (!this.openai || forceMock) {
+      return 'Mock vision description: Fotografia de estádio de futebol com campo verde e torcida.';
+    }
+
+    const model = options?.model || process.env.NVIDIA_MODEL_VISION || 'meta/llama-3.2-90b-vision-instruct';
+
+    let targetUrl = imageUrl;
+
+    // Se for URL remota (como Wikimedia Commons), converter para data URI base64 para evitar bloqueio de User-Agent pelo servidor da Wikimedia (HTTP 500)
+    try {
+      if (imageUrl.startsWith('http')) {
+        const fetchRes = await fetch(imageUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) KairoVision/1.0' }
+        });
+        if (fetchRes.ok) {
+          const buffer = await fetchRes.arrayBuffer();
+          const contentType = fetchRes.headers.get('content-type') || 'image/jpeg';
+          const base64 = Buffer.from(buffer).toString('base64');
+          targetUrl = `data:${contentType};base64,${base64}`;
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[LLM] Warning: Could not convert image to base64, using raw URL: ${e.message}`);
+    }
+
+    try {
+      const res = await this.openai.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: targetUrl } }
+            ] as any
+          }
+        ],
+        max_tokens: options?.maxTokens || 500,
+        temperature: options?.temperature || 0.1
+      });
+
+      return res.choices[0]?.message?.content || '';
+    } catch (err: any) {
+      console.error('[LLM] Error calling completeVision:', err.message);
+      throw err;
     }
   }
 
@@ -364,12 +414,18 @@ Responda SOMENTE com JSON:
     if (this.openai) {
       const embedModel = this.isNvidia ? NVIDIA_DEFAULT_EMBED_MODEL : OPENAI_DEFAULT_EMBED_MODEL;
       try {
-        const response = await this.openai.embeddings.create({
+        const payload: any = {
           model: embedModel,
           input: text,
           // NVIDIA nv-embed-v2 requer encoding_format explícito
           ...(this.isNvidia ? { encoding_format: 'float' } : {}),
-        }, (this.isNvidia ? { extra_body: { input_type: "passage" } } : undefined) as any);
+        };
+        
+        if (this.isNvidia && embedModel.includes('embedqa')) {
+          payload.input_type = "passage";
+        }
+
+        const response = await this.openai.embeddings.create(payload);
         return response.data[0]?.embedding || [];
       } catch (err) {
         console.error(`[LLM] Embed Error (${embedModel}), falling back to mock:`, err);

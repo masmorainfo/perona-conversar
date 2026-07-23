@@ -40,6 +40,7 @@ export interface CompletionOptions {
 
 export interface LLMProvider {
   complete(prompt: string, options?: CompletionOptions): Promise<string>;
+  completeVision?(prompt: string, imageUrl: string, options?: CompletionOptions): Promise<string>;
   embed(text: string): Promise<number[]>;
 }
 
