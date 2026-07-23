@@ -81,9 +81,21 @@ export default function Home() {
                 <p className="text-xs text-zinc-500 font-mono">React Flow interativo com análise e depuração profunda de payloads.</p>
               </div>
             </div>
-            {statusData.contentUnits && statusData.contentUnits.length > 0 ? (
-              <PipelineView unit={statusData.contentUnits[0]} operatorToken="temp-token" />
-            ) : (
+            {statusData.contentUnits && statusData.contentUnits.length > 0 ? (() => {
+              const rawUnit = statusData.contentUnits[0];
+              const mappedUnit = {
+                id: rawUnit.id,
+                topic: rawUnit.topic,
+                state: rawUnit.state,
+                lastTransitionAt: rawUnit.updated_at,
+                attemptCounts: rawUnit.attempt_counts || {},
+                lastError: rawUnit.metadata?.lastError || null,
+                executionsToday: 0,
+                executionsLimit: 15,
+                visitedStates: rawUnit.metadata?.visitedStates || [],
+              };
+              return <PipelineView unit={mappedUnit} operatorToken="temp-token" />;
+            })() : (
               <div className="text-zinc-500">Nenhuma unit disponível para inspecionar.</div>
             )}
           </div>

@@ -61,6 +61,9 @@ export const STATES: Record<string, StateDef> = {
   // ── Terminais negativos ──────────────────────────────────────────────────
   REJECTED:            { id: 'REJECTED',            label: 'Rejeitado',            kind: 'terminal-negative', stallAfterMinutes: null, retryQueue: null, rollbackTargets: ['RESEARCHED'] },
   ABANDONED:           { id: 'ABANDONED',           label: 'Abandonado',           kind: 'terminal-negative', stallAfterMinutes: null, retryQueue: null, rollbackTargets: ['RESEARCHED'] },
+
+  // ── Falhas estruturais ───────────────────────────────────────────────────
+  QUEUE_ERROR:         { id: 'QUEUE_ERROR',         label: 'Erro de Fila',         kind: 'fail', stallAfterMinutes: 5, retryQueue: null, rollbackTargets: ['RESEARCHED', 'EVALUATED'] },
 };
 
 /** Arestas do grafo (origem → destino). Inclui caminho feliz e loops de falha. */
