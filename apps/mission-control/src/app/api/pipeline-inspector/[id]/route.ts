@@ -17,9 +17,9 @@ function getQueue(name: string, channelId: string): Queue {
   });
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     const { rows } = await pool.query(
       'SELECT id, channel_id, topic, state, updated_at, metadata, attempt_counts FROM content_units WHERE id = $1',

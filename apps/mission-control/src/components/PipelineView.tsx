@@ -21,7 +21,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import React, { useMemo, useState, useCallback } from 'react';
-import ReactFlow, {
+import {
+  ReactFlow,
   Background,
   Controls,
   MiniMap,
@@ -30,8 +31,8 @@ import ReactFlow, {
   type Node,
   type Edge,
   type NodeProps,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
 import { STATES, EDGES, isStalled, minutesInState, type StateDef } from '../lib/pipeline-states';
 
@@ -139,7 +140,7 @@ function StateNode({ data }: NodeProps<NodeData>) {
 const nodeTypes = { state: StateNode };
 
 // ── Componente principal ─────────────────────────────────────────────────────
-export default function PipelineView({ unit, operatorToken, onActionDone }: Props) {
+export function PipelineView({ unit, operatorToken, onActionDone }: Props) {
   const [selected, setSelected] = useState<StateDef | null>(null);
   const [confirming, setConfirming] = useState<{ action: 'retry' | 'rollback'; target?: string } | null>(null);
   const [reason, setReason] = useState('');
