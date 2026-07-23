@@ -12,3 +12,11 @@ scratch/
 .tempmediaStorage/
 repos/
 
+latest_logs.txt
+*.log
+prod_scratch_query.ts
+scratch_db*.ts
+*_logs*.txt
+railway_vars.txt
+tmp_vars.txt
+scratch_query*.ts

@@ -30,6 +30,7 @@ export const CONTENT_STATES = [
   'PUBLISHED_PARTIAL',
   'ANALYZED',
   'LEARNED',
+  'QUEUE_ERROR',
 ] as const
 
 export type ContentState = (typeof CONTENT_STATES)[number]

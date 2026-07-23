@@ -300,7 +300,33 @@ export async function processEvent(
     }
 
 
-    await dispatchNextAction(pool, nextStateValue as ContentState, newState.context);
+    try {
+      await dispatchNextAction(pool, nextStateValue as ContentState, newState.context);
+    } catch (err: any) {
+      const queueErrorReason = err.message || String(err);
+      console.error(`[Supervisor] 🚨 Falha ao enfileirar após ${nextStateValue} para unit ${contentId}: ${queueErrorReason}`);
+      
+      const queueErrorMetadata = {
+        ...(newState.context.metadata || {}),
+        queueErrorFrom: nextStateValue,
+        queueErrorSource: 'dispatch-catch',
+        queueErrorReason,
+        queueErrorAt: new Date().toISOString()
+      };
+
+      await persistTransition(
+        pool,
+        contentId,
+        nextStateValue as ContentState,
+        'QUEUE_ERROR',
+        'Supervisor',
+        `Queue enqueue failed: ${queueErrorReason}`,
+        queueErrorMetadata,
+        newState.context.attemptCounts as any
+      );
+      
+      throw err;
+    }
   }
 }
 
@@ -434,6 +460,12 @@ function mapJobToEvent(jobType: string, data: any): ContentMachineEvent | null {
 async function dispatchNextAction(pool: any, state: ContentState, context: ContentMachineContext) {
   const { channelId, contentId } = context;
 
+  const defaultJobOpts = {
+    jobId: `${contentId}:${state}`,
+    removeOnComplete: true,
+    removeOnFail: true
+  };
+
   switch (state) {
     case 'EVALUATED':
       await getQueue('editorial', channelId).add('evaluate', { 
@@ -441,10 +473,10 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         channelId, 
         topic: context.topic,
         opportunityId: context.metadata?.opportunity_id
-      });
+      }, defaultJobOpts);
       break;
     case 'APPROVED':
-      await getQueue('research', channelId).add('research', { contentId, channelId, topic: context.topic });
+      await getQueue('research', channelId).add('research', { contentId, channelId, topic: context.topic }, defaultJobOpts);
       break;
     case 'RESEARCHED':
     case 'REVISED':
@@ -453,7 +485,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         channelId, 
         researchPackage: context.metadata.researchPackage,
         attemptNumber: (context.attemptCounts['CRITIC_FAIL'] || 0) + 1
-      });
+      }, defaultJobOpts);
       break;
     case 'SCRIPTED':
       await getQueue('critic', channelId).add('review_script', {
@@ -461,7 +493,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         channelId,
         script: context.metadata.script,
         attemptNumber: (context.attemptCounts['CRITIC_FAIL'] || 0) + 1
-      });
+      }, defaultJobOpts);
       break;
     case 'CRITIC_OK':
       await getQueue('storyboard', channelId).add('plan_storyboard', {
@@ -470,7 +502,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         script: context.metadata.script,
         canonArchetype: context.metadata.canonArchetype,
         canonTargetEmotion: context.metadata.canonTargetEmotion,
-      });
+      }, defaultJobOpts);
       break;
     case 'STORYBOARD_PLANNED':
       await getQueue('media', channelId).add('generate_media', {
@@ -479,7 +511,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         storyManifestPath: context.metadata.storyManifestPath,
         canonArchetype: context.metadata.canonArchetype,
         canonTargetEmotion: context.metadata.canonTargetEmotion,
-      });
+      }, defaultJobOpts);
       break;
     case 'PRODUCED':
       await getQueue('render', channelId).add('render_video', {
@@ -492,7 +524,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         },
         canonArchetype: context.metadata.canonArchetype,
         canonTargetEmotion: context.metadata.canonTargetEmotion,
-      });
+      }, defaultJobOpts);
       break;
     case 'PENDING_REVIEW':
       try {
@@ -566,6 +598,10 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
             videoFilePath: context.metadata.videoFile,
             metadata: publishMetadata,
             attemptNumber: 1
+          }, {
+            jobId: `${contentId}:${state}:${platform}`,
+            removeOnComplete: true,
+            removeOnFail: true
           });
         }
       } catch (err) {
@@ -578,7 +614,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         contentId,
         channelId,
         videoFilePath: context.metadata.videoFile
-      });
+      }, defaultJobOpts);
       break;
     case 'CINEMATIC_REVIEWING':
       await getQueue('cinematic-review', channelId).add('review_cinematic', {
@@ -587,7 +623,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         videoFilePath: context.metadata.videoFile,
         script: context.metadata.script,
         attemptNumber: (context.attemptCounts['CINEMATIC_FAIL'] || 0) + 1
-      });
+      }, defaultJobOpts);
       break;
     case 'PUBLISHED':
     case 'PUBLISHED_PARTIAL':
@@ -595,14 +631,14 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
         contentId,
         channelId,
         publicationResults: context.metadata.publicationResults
-      });
+      }, defaultJobOpts);
       break;
     case 'ANALYZED':
       await getQueue('learning', channelId).add('extract_learning', {
         contentId,
         channelId,
         analyticsData: context.metadata.analyticsData
-      });
+      }, defaultJobOpts);
       break;
     default:
       // No immediate next action for this state

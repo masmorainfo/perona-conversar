@@ -3,6 +3,7 @@ import { approveEntry, rejectEntry } from '@cos/cgl-writer';
 import { SUPERVISOR_QUEUE, OPPORTUNITY_TRIGGER_QUEUE, queueName } from '@cos/events';
 import { handleSupervisorEvent, processEvent } from './eventHandler.js';
 import { initDb, closeDb, getPool } from './db.js';
+import { startReconciler } from './reconciler.js';
 import { initNotifications, notify, isNotificationsEnabled, getUpdates, editTelegramMessage, editTelegramCaption, answerCallbackQuery } from '@cos/notifications';
 import type { TelegramUpdate } from '@cos/notifications';
 import dotenv from 'dotenv';
@@ -1107,6 +1108,9 @@ async function bootstrap() {
 
   // Inicializa notificações Telegram
   initNotifications({ botToken: TELEGRAM_BOT_TOKEN, chatId: TELEGRAM_CHAT_ID });
+
+  // Inicia o reconciliador para evitar jobs presos (limbo)
+  startReconciler(getPool());
 
   const worker = new Worker(
     SUPERVISOR_QUEUE,
