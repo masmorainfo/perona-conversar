@@ -71,10 +71,24 @@ async function processStoryboardJob(job: Job<StoryboardJobData>) {
 }
 
 async function processMediaJob(job: Job<MediaJobData>) {
-  const { contentId, channelId, storyManifestPath } = job.data;
+  const { contentId, channelId, storyManifestPath, script, canonArchetype } = job.data;
   console.log(`[Media Agent] Iniciando síntese física de ativos para unit: ${contentId}`);
 
-  if (!fs.existsSync(storyManifestPath)) {
+  const assetsDir = path.resolve(process.cwd(), `../../../tmp/assets/${contentId}`);
+  if (!fs.existsSync(assetsDir)) {
+    fs.mkdirSync(assetsDir, { recursive: true });
+  }
+
+  // Se o manifesto conceitual não existe em disco (ex: container reiniciou e limpou /tmp),
+  // e temos o roteiro, recria o manifesto conceitual automaticamente!
+  if (!fs.existsSync(storyManifestPath) && script) {
+    console.log(`[Media Agent] ⚠️ Manifesto não encontrado em ${storyManifestPath} (limpeza de /tmp). Recriando a partir do roteiro...`);
+    const direction = directNarrative(canonArchetype);
+    const plannedScenes = planStoryboard(script, direction);
+    const manifest = await memoryProvider.buildConceptManifest(contentId, channelId, plannedScenes, direction, script.title);
+    fs.writeFileSync(storyManifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+    console.log(`[Media Agent] ✅ Manifesto conceitual recriado com sucesso em ${storyManifestPath}.`);
+  } else if (!fs.existsSync(storyManifestPath)) {
     throw new Error(`Manifesto conceitual não encontrado no caminho: ${storyManifestPath}`);
   }
 
