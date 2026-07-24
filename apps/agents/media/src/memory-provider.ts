@@ -379,10 +379,21 @@ export class MemoryProvider {
   }
 
   private async downloadUrlToLocal(url: string, destPath: string): Promise<void> {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.statusText}`);
-    const buffer = await res.arrayBuffer();
-    fs.writeFileSync(destPath, Buffer.from(buffer));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Kairo/1.0',
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+      const buffer = await res.arrayBuffer();
+      fs.writeFileSync(destPath, Buffer.from(buffer));
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /**
@@ -465,15 +476,20 @@ export class MemoryProvider {
       } else if (layout.mediaUrl) {
         if (layout.mediaUrl.startsWith('http://') || layout.mediaUrl.startsWith('https://')) {
           if (layout.sourcingMetadata) {
-            // Nova lógica: baixar da fonte e re-upar no S3 Zernio para durabilidade
-            console.log(`[Memory Provider] 🔄 Baixando imagem do sourcing: ${layout.mediaUrl}`);
-            const ext = layout.mediaUrl.split('.').pop()?.split('?')[0] || 'jpg';
-            const visualFile = path.join(assetsDir, `sourcing_scene_${idx}.${ext}`);
-            await this.downloadUrlToLocal(layout.mediaUrl, visualFile);
-            const publicImageUrl = await this.uploadFileToS3(visualFile, `image/${ext === 'png' ? 'png' : 'jpeg'}`);
-            layout.mediaUrl = publicImageUrl;
-            assetUrls[`visual_scene_${idx}`] = publicImageUrl;
-            console.log(`[Memory Provider] ✅ Sourcing re-upado: ${publicImageUrl}`);
+            try {
+              // Nova lógica: baixar da fonte e re-upar no S3 Zernio para durabilidade
+              console.log(`[Memory Provider] 🔄 Baixando imagem do sourcing: ${layout.mediaUrl}`);
+              const ext = layout.mediaUrl.split('.').pop()?.split('?')[0] || 'jpg';
+              const visualFile = path.join(assetsDir, `sourcing_scene_${idx}.${ext}`);
+              await this.downloadUrlToLocal(layout.mediaUrl, visualFile);
+              const publicImageUrl = await this.uploadFileToS3(visualFile, `image/${ext === 'png' ? 'png' : 'jpeg'}`);
+              layout.mediaUrl = publicImageUrl;
+              assetUrls[`visual_scene_${idx}`] = publicImageUrl;
+              console.log(`[Memory Provider] ✅ Sourcing re-upado: ${publicImageUrl}`);
+            } catch (dlErr: any) {
+              console.warn(`[Memory Provider] ⚠️ Falha no download do sourcing (${layout.mediaUrl}): ${dlErr.message}. Mantendo URL remota direta.`);
+              assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
+            }
           } else {
             assetUrls[`visual_scene_${idx}`] = layout.mediaUrl;
             console.log(`[Memory Provider] 🔁 Rerender cena ${idx + 1}: imagem remota mantida = ${layout.mediaUrl}`);
