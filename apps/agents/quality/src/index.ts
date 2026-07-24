@@ -31,7 +31,9 @@ async function processQualityJob(job: Job<QualityJobData>) {
   const { contentId, channelId, videoFilePath } = job.data;
   console.log(`[Quality Control Agent] Analisando vídeo: ${videoFilePath}`);
 
-  // Busca manifest do DB (opção A: evita dependência de /tmp persistente entre containers)
+  // Busca manifest para C5/C6 — estratégia em duas camadas:
+  // 1. Arquivo em disco /tmp (disponível quando container não reiniciou)
+  // 2. storyManifestAudit no DB (persistido pelo Media Agent após síntese — durável)
   let manifest: any | null = null;
   try {
     const dbRes = await pool.query(
@@ -41,18 +43,42 @@ async function processQualityJob(job: Job<QualityJobData>) {
     const metadata = dbRes.rows[0]?.metadata || {};
     const manifestPath: string | null = metadata.storyManifestPath || null;
 
+    // Camada 1: arquivo em disco (preferido — inclui todos os campos)
     if (manifestPath) {
       manifest = loadManifest(manifestPath);
       if (manifest) {
-        console.log(`[Quality Control Agent] Manifest carregado: ${manifestPath} (${manifest.scenes?.length ?? 0} cenas)`);
-      } else {
-        console.warn(`[Quality Control Agent] ⚠️ Manifest não encontrado em disco: ${manifestPath} — C5/C6 usarão fallback conservador.`);
+        console.log(`[Quality Control Agent] Manifest carregado do disco: ${manifestPath} (${manifest.scenes?.length ?? 0} cenas)`);
       }
-    } else {
-      console.warn(`[Quality Control Agent] ⚠️ storyManifestPath ausente no metadata — C5/C6 não verificáveis.`);
+    }
+
+    // Camada 2: storyManifestAudit do DB (fallback durável após reinício de container)
+    if (!manifest && metadata.storyManifestAudit) {
+      const audit = metadata.storyManifestAudit;
+      // Reconstrói estrutura compatível com analyzeVideoQuality a partir do audit
+      manifest = {
+        scenes: (audit.scenes || []).map((s: any) => ({
+          id: s.id,
+          layout: {
+            isAiFallback: s.isAiFallback,
+            isAbstraction: s.isAbstraction,
+            sourcingMetadata: s.sourcingMetadata,
+            narrationPath: s.narrationPath_present ? 'db_persisted' : null,
+            voiceModel: s.voiceModel,
+          },
+          captions: {
+            wordTimestamps: s.wordTimestamps || [],
+          },
+        })),
+        globalStyle: { voiceModel: audit.globalVoiceModel },
+      };
+      console.log(`[Quality Control Agent] Manifest reconstruído do storyManifestAudit no DB (${manifest.scenes.length} cenas) — container reiniciou, /tmp limpo.`);
+    }
+
+    if (!manifest) {
+      console.warn(`[Quality Control Agent] ⚠️ Sem manifest em disco nem no DB — C5/C6 usarão fallback conservador (reprovação).`);
     }
   } catch (err) {
-    console.error('[Quality Control Agent] Erro ao buscar manifest do DB:', err);
+    console.error('[Quality Control Agent] Erro ao buscar manifest:', err);
   }
 
   // Executa verificação dos 7 critérios

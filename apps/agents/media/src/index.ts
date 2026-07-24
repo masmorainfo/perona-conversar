@@ -106,6 +106,40 @@ async function processMediaJob(job: Job<MediaJobData>) {
   fs.writeFileSync(storyManifestPath, JSON.stringify(synthesizedManifest, null, 2), 'utf-8');
   console.log(`[Media Agent] Story Manifest físico atualizado.`);
 
+  // ── Persistência durável dos campos de auditoria C5/C6 no banco ─────────────
+  // O story_manifest.json vive em /tmp (volátil). Ao persistir storyManifestAudit
+  // no metadata da unit, garantimos que o Quality Agent e auditorias futuras possam
+  // verificar sourcingMetadata (C5) e wordTimestamps (C6) mesmo após reinício do container.
+  try {
+    const manifestAudit = {
+      persistedAt: new Date().toISOString(),
+      totalScenes: synthesizedManifest.scenes?.length ?? 0,
+      scenes: (synthesizedManifest.scenes || []).map((scene: any) => ({
+        id: scene.id,
+        isAiFallback: scene.layout?.isAiFallback ?? false,
+        isAbstraction: scene.layout?.isAbstraction ?? false,
+        sourcingMetadata: scene.layout?.sourcingMetadata ?? null,
+        wordTimestamps_count: Array.isArray(scene.captions?.wordTimestamps)
+          ? scene.captions.wordTimestamps.length
+          : 0,
+        wordTimestamps: scene.captions?.wordTimestamps ?? [],
+        narrationPath_present: !!scene.layout?.narrationPath,
+        voiceModel: scene.layout?.voiceModel ?? null,
+      })),
+      globalVoiceModel: (synthesizedManifest.globalStyle as any)?.voiceModel ?? null,
+    };
+    await pool.query(
+      `UPDATE content_units
+         SET metadata = jsonb_set(metadata, '{storyManifestAudit}', $1::jsonb, true)
+       WHERE id = $2`,
+      [JSON.stringify(manifestAudit), contentId]
+    );
+    console.log(`[Media Agent] ✅ storyManifestAudit persistido no banco (${manifestAudit.totalScenes} cenas).`);
+  } catch (persistErr: any) {
+    // Falha na persistência não deve bloquear o pipeline — loga e continua
+    console.error(`[Media Agent] ⚠️ Erro ao persistir storyManifestAudit: ${persistErr.message}`);
+  }
+
   const resultData: MediaResultData = {
     contentId,
     channelId,
