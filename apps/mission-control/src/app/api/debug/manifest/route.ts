@@ -10,6 +10,18 @@ import path from 'path';
  * TEMPORÁRIO — remover após validação do gate de qualidade.
  */
 export async function GET(req: NextRequest) {
+  // ── 1. Autenticação ────────────────────────────────────────────────────
+  const token = req.headers.get('x-operator-token');
+  if (!process.env.MISSION_CONTROL_OPERATOR_TOKEN) {
+    return NextResponse.json(
+      { error: 'MISSION_CONTROL_OPERATOR_TOKEN não configurado no servidor.' },
+      { status: 500 }
+    );
+  }
+  if (token !== process.env.MISSION_CONTROL_OPERATOR_TOKEN) {
+    return NextResponse.json({ error: 'Token de operador inválido.' }, { status: 401 });
+  }
+
   const contentId = req.nextUrl.searchParams.get('contentId');
   if (!contentId) {
     return NextResponse.json({ error: 'contentId required' }, { status: 400 });

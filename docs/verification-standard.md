@@ -22,6 +22,8 @@
 > **Resultado da regressão (2026-07-24):** O endpoint `/api/debug/manifest` respondeu com `404 Manifest not found` para ambas as units de referência. O redeploy de Railway criou um novo container e limpou `/tmp` — confirmando o defeito arquitetural. O `storyManifestAudit` **não existe** no banco para essas duas units porque foram processadas antes da correção de hoje.
 >
 > **Conclusão honesta:** C5 e C6 não podem ser testados retroativamente em `ebfc1302` e `19fc76ad`. O primeiro vídeo processado a partir de hoje terá `storyManifestAudit` no banco e será o caso de regressão real. Esta seção será atualizada com valores medidos quando isso ocorrer.
+>
+> **Segurança e Ferramental:** O endpoint `/api/debug/manifest` é uma ferramenta de auditoria temporária protegida por autenticação obrigatória via cabeçalho `x-operator-token` (validador `MISSION_CONTROL_OPERATOR_TOKEN`). Será removido do código assim que o primeiro vídeo real confirmar os dados de `storyManifestAudit` no banco.
 
 ---
 
