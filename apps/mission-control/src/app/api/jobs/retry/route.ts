@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
         ...(unit.metadata?.researchPackage ? { researchPackage: unit.metadata.researchPackage } : {}),
         ...(unit.metadata?.script ? { script: unit.metadata.script } : {}),
         ...(unit.metadata?.assetUrls ? { assetUrls: unit.metadata.assetUrls } : {}),
-        ...(unit.metadata?.manifestPath ? { storyManifestPath: unit.metadata.manifestPath } : {}),
+        ...(unit.metadata?.storyManifestPath || unit.metadata?.manifestPath ? { storyManifestPath: unit.metadata.storyManifestPath || unit.metadata.manifestPath } : {}),
         ...(unit.metadata?.canonArchetype ? { canonArchetype: unit.metadata.canonArchetype } : {}),
         ...(unit.metadata?.canonTargetEmotion ? { canonTargetEmotion: unit.metadata.canonTargetEmotion } : {}),
         attemptNumber: 1,
