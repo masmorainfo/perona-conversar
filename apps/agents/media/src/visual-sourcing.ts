@@ -107,6 +107,9 @@ export async function sourceVisual(
 
   const checkTemporalAndSafety = (title: string, url: string, description?: string): string | null => {
     const fullText = (title + ' ' + url + ' ' + (description || '')).toLowerCase();
+    if (/\.(tiff?|bmp|heic)$/i.test(url) || /\.tiff?/i.test(title)) {
+      return 'Formato de imagem incompatível com o navegador (TIFF/BMP/HEIC).';
+    }
     if (isTragicOrAccident(fullText)) {
       return 'Imagem contém termos de acidente, tragédia ou violência.';
     }
