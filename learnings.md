@@ -19,7 +19,9 @@
 ### [2026-07-24] Concorrência de jobId no BullMQ e falso modo de falha na camada de idempotência
 - Incident: Adição de custom `jobId: ${contentId}:${state}` para garantir idempotência usava caractere `:` proibido pelo BullMQ. O `queue.add()` falhava capturado no Supervisor, deixando 13 units em limbo sem enfileiramento, posteriormente varridas pelo Reconciler como `QUEUE_ERROR`.
 - Root cause: Falta de validação comportamental de runtime para nova camada de proteção e uso de caractere delimitador reservado pelo BullMQ.
-- Rule learned: "Correção que adiciona mecanismo pode criar modo de falha novo — toda camada de proteção precisa de validação comportamental em ambiente real, não só build."
+- Rules learned:
+  1. "Correção que adiciona mecanismo pode criar modo de falha novo — toda camada de proteção precisa de validação comportamental em ambiente real, não só build."
+  2. "Enum ausente no banco rejeita a escrita para TODAS as conexões até a migration ser aplicada — e aceita para todas imediatamente após. Falha de enum é sempre 'migration não aplicada', nunca 'conexão com cache'."
 
 ### [2026-07-20] Validação de encanamento com manifest incorreto (Fase 0)
 - Incident: O re-render de validação local usou o manifest do Zidane (contendo ebfc no meio do UUID) em vez do ID correto do Neymar (ebfc1302).

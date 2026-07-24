@@ -100,19 +100,36 @@ export async function POST(req: NextRequest) {
       via: 'mission-control',
     };
     const newDbState = action === 'rollback' ? targetState! : unit.state;
-    await pool.query(
-      `UPDATE content_units
-         SET state = $2,
-             updated_at = NOW(),
-             metadata = jsonb_set(
-               COALESCE(metadata, '{}'::jsonb),
-               '{operatorActions}',
-               COALESCE(metadata->'operatorActions', '[]'::jsonb) || $3::jsonb,
-               true
-             )
-       WHERE id = $1`,
-      [contentId, newDbState, JSON.stringify(auditEntry)]
-    );
+    
+    // Transição canônica: atualiza content_units e insere em content_transitions (com histórico)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE content_units
+           SET state = $2,
+               updated_at = NOW(),
+               metadata = jsonb_set(
+                 COALESCE(metadata, '{}'::jsonb),
+                 '{operatorActions}',
+                 COALESCE(metadata->'operatorActions', '[]'::jsonb) || $3::jsonb,
+                 true
+               )
+         WHERE id = $1`,
+        [contentId, newDbState, JSON.stringify(auditEntry)]
+      );
+      await client.query(
+        `INSERT INTO content_transitions (content_id, from_state, to_state, actor, reason)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [contentId, unit.state, newDbState, 'mission-control', reason.trim()]
+      );
+      await client.query('COMMIT');
+    } catch (dbErr) {
+      await client.query('ROLLBACK');
+      throw dbErr;
+    } finally {
+      client.release();
+    }
 
     // ── 6. Injeção do EVENTO na fila correspondente ────────────────────────
     const JOB_NAME_BY_QUEUE: Record<string, string> = {

@@ -332,8 +332,8 @@ export function PipelineView({ unit, operatorToken, onActionDone }: Props) {
                 : `Retroceder para "${STATES[confirming.target!]?.label}"`}
             </h3>
             <p>
-              Isso injeta um <b>evento na máquina de estados</b> (nunca reset direto no banco),
-              consome <b>1 execução</b> do limite diário e fica registrado na auditoria com o seu motivo.
+              Isso retrocede o estado pela função canônica (<code>persistTransition</code>), enfileira a retomada na fila correspondente,
+              consome <b>1 execução</b> do limite diário e grava o histórico com o seu motivo.
             </p>
             <label>
               Motivo (obrigatório, mín. 5 caracteres)
