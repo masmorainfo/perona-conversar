@@ -86,7 +86,7 @@ async function runReconciliation(pool: any) {
     if (!queueType) continue;
 
     const queue = getQueue(queueType, unit.channel_id);
-    const jobId = `${unit.id}:${state}`;
+    const jobId = `${unit.id}_${state}`;
     
     try {
       const job = await queue.getJob(jobId);

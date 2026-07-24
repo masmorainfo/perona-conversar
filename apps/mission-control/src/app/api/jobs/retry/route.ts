@@ -132,12 +132,9 @@ export async function POST(req: NextRequest) {
   const queue = getQueue(check.queue, unit.channel_id);
   try {
     // Usar o mesmo jobId determinístico que o Supervisor usa em dispatchNextAction:
-    // `${contentId}:${state}` — onde state é o estado atual da unit antes da retentativa.
-    // Isso garante que:
-    // 1. O reconciliador continue encontrando o job pelo ID esperado.
-    // 2. Se um job com o mesmo ID já existir (estado travado), ele é removido antes de
-    //    um novo ser adicionado — tornando o retry idempotente.
-    const deterministicJobId = `${contentId}:${unit.state}`;
+    // `${contentId}_${state}` — onde state é o estado atual da unit antes da retentativa.
+    // O BullMQ proíbe ':' em jobId customizados, por isso usamos '_'.
+    const deterministicJobId = `${contentId}_${unit.state}`;
     const existingJob = await queue.getJob(deterministicJobId);
     if (existingJob) {
       const existingState = await existingJob.getState();

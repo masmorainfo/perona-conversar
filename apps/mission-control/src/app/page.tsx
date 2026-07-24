@@ -90,6 +90,8 @@ export default function Home() {
                 lastTransitionAt: rawUnit.updated_at,
                 attemptCounts: rawUnit.attempt_counts || {},
                 lastError: rawUnit.metadata?.lastError || null,
+                queueErrorFrom: rawUnit.metadata?.queueErrorFrom || null,
+                queueErrorReason: rawUnit.metadata?.queueErrorReason || null,
                 executionsToday: 0,
                 executionsLimit: 15,
                 visitedStates: rawUnit.metadata?.visitedStates || [],

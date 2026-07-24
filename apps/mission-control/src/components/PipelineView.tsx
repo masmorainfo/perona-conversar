@@ -52,6 +52,8 @@ export interface PipelineUnit {
   lastTransitionAt: string;             // ISO — updated_at da unit
   attemptCounts?: Record<string, number>; // metadata.attemptCounts
   lastError?: string | null;            // metadata.lastError (mensagem literal)
+  queueErrorFrom?: string | null;       // metadata.queueErrorFrom
+  queueErrorReason?: string | null;     // metadata.queueErrorReason
   visitedStates?: string[];             // opcional: histórico; sem ele, infere pelo caminho feliz
   executionsToday: number;              // consumo do limite diário
   executionsLimit: number;              // ex.: 15
@@ -192,14 +194,23 @@ export function PipelineView({ unit, operatorToken, onActionDone }: Props) {
           reason: reason.trim(),
         }),
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
-      setFeedback(`✅ ${body.message ?? 'Ação registrada e enfileirada.'}`);
+      const responseText = await res.text();
+      let body: any;
+      try {
+        body = JSON.parse(responseText);
+      } catch {
+        body = null;
+      }
+      if (!res.ok) {
+        const errorMsg = body?.error ?? (responseText.trim() ? responseText.trim() : `HTTP ${res.status}`);
+        throw new Error(`HTTP ${res.status} — ${errorMsg}`);
+      }
+      setFeedback(`✅ ${body?.message ?? 'Ação registrada e enfileirada.'}`);
       setConfirming(null);
       setReason('');
       onActionDone?.();
     } catch (err: any) {
-      setFeedback(`🚨 Falhou: ${err.message}`); // erro literal, sem maquiagem
+      setFeedback(`🚨 Falhou: ${err.message}`); // erro literal com HTTP status e corpo
     } finally {
       setBusy(false);
     }
@@ -243,10 +254,15 @@ export function PipelineView({ unit, operatorToken, onActionDone }: Props) {
             <dt>Tentativas ({selected.id})</dt><dd>{unit.attemptCounts?.[selected.id] ?? 0}</dd>
           </dl>
 
-          {unit.lastError && (
+          {(unit.lastError || unit.queueErrorReason) && (
             <section className="pi-error">
-              <h4>Último erro (literal)</h4>
-              <pre>{unit.lastError}</pre>
+              <h4>Último Erro / Falha de Fila</h4>
+              {unit.queueErrorFrom && (
+                <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>
+                  Origem da falha de fila: <strong>{unit.queueErrorFrom}</strong>
+                </div>
+              )}
+              <pre>{unit.queueErrorReason ?? unit.lastError}</pre>
             </section>
           )}
 

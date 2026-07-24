@@ -471,7 +471,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
   const { channelId, contentId } = context;
 
   const defaultJobOpts = {
-    jobId: `${contentId}:${state}`,
+    jobId: `${contentId}_${state}`,
     removeOnComplete: true,
     removeOnFail: true
   };
