@@ -11,15 +11,17 @@
 
 | Critério | Implementado | Testado em regressão |
 |---|---|---|
-| C1 Áudio presente | ✅ 2026-07-24 | ✅ medido em `ebfc1302` e `19fc76ad` |
-| C2 Dark frames ≤10% | ✅ 2026-07-24 | ✅ medido em `ebfc1302` e `19fc76ad` |
-| C3 Resolução mínima | ✅ 2026-07-24 | ✅ medido em `ebfc1302` e `19fc76ad` |
-| C4 Duração no intervalo | ✅ 2026-07-24 | ✅ medido em `ebfc1302` e `19fc76ad` |
-| C5 Licença + Verdict | ✅ 2026-07-24 | ⏳ pendente — manifest não persistido em `ebfc1302`/`19fc76ad` (existentes antes de 2026-07-24); regressão em andamento |
-| C6 Karaokê/timestamps | ✅ 2026-07-24 | ⏳ pendente — idem C5 |
+| C1 Áudio presente | ✅ 2026-07-24 | ✅ medido em `ebfc1302` (✅) e `19fc76ad` (✅) |
+| C2 Dark frames ≤10% | ✅ 2026-07-24 | ✅ medido em `ebfc1302` (✅) e `19fc76ad` (✅) |
+| C3 Resolução mínima | ✅ 2026-07-24 | ✅ medido: ambas 1080×1920 ✅ |
+| C4 Duração no intervalo | ✅ 2026-07-24 | ✅ medido: `ebfc1302` = 32.6s ✅, `19fc76ad` = 45.7s ✅ |
+| C5 Licença + Verdict | ✅ 2026-07-24 | ❌ N/A retroativo — manifest perdido no redeploy de 2026-07-24 (confirmado por HTTP 404 no endpoint `/api/debug/manifest`). Correção arquitetural ativa para vídeos a partir de hoje. |
+| C6 Karaokê/timestamps | ✅ 2026-07-24 | ❌ N/A retroativo — idem C5. |
 | C7 LUFS | ✅ 2026-07-24 | ✅ medido: `ebfc1302` = −21.6 LUFS ✅, `19fc76ad` = −14.9 LUFS ✅ |
 
-> **Nota de honestidade:** C5 e C6 foram implementados com os campos e paths corretos confirmados na estrutura real do manifest (`scene.layout.sourcingMetadata`, `scene.captions.wordTimestamps`, `verdict: 'ACCEPTED'|'DISCARDED'`). O teste de regressão com valores medidos ficará pendente até o primeiro vídeo processado com `storyManifestAudit` persistido no banco (a partir de 2026-07-24). Nenhum vídeo será declarado "aprovado em C5/C6" sem evidência medida.
+> **Resultado da regressão (2026-07-24):** O endpoint `/api/debug/manifest` respondeu com `404 Manifest not found` para ambas as units de referência. O redeploy de Railway criou um novo container e limpou `/tmp` — confirmando o defeito arquitetural. O `storyManifestAudit` **não existe** no banco para essas duas units porque foram processadas antes da correção de hoje.
+>
+> **Conclusão honesta:** C5 e C6 não podem ser testados retroativamente em `ebfc1302` e `19fc76ad`. O primeiro vídeo processado a partir de hoje terá `storyManifestAudit` no banco e será o caso de regressão real. Esta seção será atualizada com valores medidos quando isso ocorrer.
 
 ---
 
