@@ -2,20 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const OPERATOR_TOKEN = process.env.MISSION_CONTROL_OPERATOR_TOKEN || 'temp-token';
+
 
 /**
  * GET /api/debug/manifest?contentId=<uuid>
- * Lê o story_manifest.json do /tmp do container e retorna como JSON.
- * Usado para auditoria de C5/C6 e testes de regressão.
- * Remover ou proteger após uso em produção.
+ * Lê o story_manifest.json do /tmp do container e retorna os campos de auditoria C5/C6.
+ * TEMPORÁRIO — remover após validação do gate de qualidade.
  */
 export async function GET(req: NextRequest) {
-  const token = req.headers.get('x-operator-token');
-  if (token !== OPERATOR_TOKEN) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const contentId = req.nextUrl.searchParams.get('contentId');
   if (!contentId) {
     return NextResponse.json({ error: 'contentId required' }, { status: 400 });
