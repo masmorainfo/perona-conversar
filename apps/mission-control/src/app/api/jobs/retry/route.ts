@@ -99,16 +99,19 @@ export async function POST(req: NextRequest) {
       reason: reason.trim(),
       via: 'mission-control',
     };
+    const newDbState = action === 'rollback' ? targetState! : unit.state;
     await pool.query(
       `UPDATE content_units
-         SET metadata = jsonb_set(
-           COALESCE(metadata, '{}'::jsonb),
-           '{operatorActions}',
-           COALESCE(metadata->'operatorActions', '[]'::jsonb) || $2::jsonb,
-           true
-         )
+         SET state = $2,
+             updated_at = NOW(),
+             metadata = jsonb_set(
+               COALESCE(metadata, '{}'::jsonb),
+               '{operatorActions}',
+               COALESCE(metadata->'operatorActions', '[]'::jsonb) || $3::jsonb,
+               true
+             )
        WHERE id = $1`,
-      [contentId, JSON.stringify(auditEntry)]
+      [contentId, newDbState, JSON.stringify(auditEntry)]
     );
 
     // ── 6. Injeção do EVENTO na fila correspondente ────────────────────────
