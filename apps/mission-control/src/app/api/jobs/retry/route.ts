@@ -16,12 +16,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { Queue } from 'bullmq';
 import { isValidManualAction, STATES } from '@/lib/pipeline-states';
+import { queueName } from '@cos/events';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-import { queueName } from '@cos/events';
-
-// ADAPTE: usando queueName do pacote events
 function getQueue(name: string, channelId: string): Queue {
   const qName = queueName(name as any, channelId);
   const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -44,123 +42,129 @@ interface RetryBody {
 }
 
 export async function POST(req: NextRequest) {
-  // ── 1. Autenticação ────────────────────────────────────────────────────
-  const token = req.headers.get('x-operator-token');
-  if (!process.env.MISSION_CONTROL_OPERATOR_TOKEN) {
-    return NextResponse.json({ error: 'MISSION_CONTROL_OPERATOR_TOKEN não configurado no servidor.' }, { status: 500 });
-  }
-  if (token !== process.env.MISSION_CONTROL_OPERATOR_TOKEN) {
-    return NextResponse.json({ error: 'Token de operador inválido.' }, { status: 401 });
-  }
-
-  // ── 2. Validação do corpo ──────────────────────────────────────────────
-  let body: RetryBody;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
-  }
-  const { contentId, currentState, action, targetState, reason } = body ?? {};
-  if (!contentId || !currentState || !action || !reason || reason.trim().length < 5) {
-    return NextResponse.json(
-      { error: 'Campos obrigatórios: contentId, currentState, action, reason (mín. 5 caracteres).' },
-      { status: 400 }
-    );
-  }
-
-  // ── 3. Estado real no banco (o cliente pode estar defasado) ────────────
-  const { rows } = await pool.query(
-    'SELECT id, state, channel_id, topic, metadata FROM content_units WHERE id = $1',
-    [contentId]
-  );
-  if (rows.length === 0) {
-    return NextResponse.json({ error: `Unit ${contentId} não existe.` }, { status: 404 });
-  }
-  const unit = rows[0];
-  if (unit.state !== currentState) {
-    return NextResponse.json(
-      { error: `Estado defasado: o painel mostra ${currentState}, mas a unit está em ${unit.state}. Recarregue.` },
-      { status: 409 }
-    );
-  }
-
-  // ── 4. Transição válida? ───────────────────────────────────────────────
-  const check = isValidManualAction(unit.state, action, targetState);
-  if (!check.ok || !check.queue) {
-    return NextResponse.json({ error: check.reason ?? 'Ação inválida para este estado.' }, { status: 422 });
-  }
-
-  // ── 5. Auditoria ANTES da ação (regra de operações manuais) ────────────
-  // ADAPTE: se preferir tabela dedicada, crie operator_actions com estas colunas.
-  // Aqui gravamos no metadata da unit, que já viaja com ela pelo pipeline.
-  const auditEntry = {
-    at: new Date().toISOString(),
-    action,
-    fromState: unit.state,
-    toState: action === 'rollback' ? targetState : unit.state,
-    queue: check.queue,
-    reason: reason.trim(),
-    via: 'mission-control',
-  };
-  await pool.query(
-    `UPDATE content_units
-       SET metadata = jsonb_set(
-         COALESCE(metadata, '{}'::jsonb),
-         '{operatorActions}',
-         COALESCE(metadata->'operatorActions', '[]'::jsonb) || $2::jsonb,
-         true
-       )
-     WHERE id = $1`,
-    [contentId, JSON.stringify(auditEntry)]
-  );
-
-  // ── 6. Injeção do EVENTO na fila correspondente ────────────────────────
-  const JOB_NAME_BY_QUEUE: Record<string, string> = {
-    editorial: 'evaluate',
-    research: 'research',
-    script: 'write_script',
-    critic: 'review_script',
-    storyboard: 'plan_storyboard',
-    media: 'generate_media',
-    render: 'render_video',
-    quality: 'qc_video',
-    'cinematic-review': 'review_cinematic',
-    publisher: 'publish',
-  };
-  const jobName = JOB_NAME_BY_QUEUE[check.queue] ?? 'retry';
-
-  const queue = getQueue(check.queue, unit.channel_id);
-  try {
-    // Usar o mesmo jobId determinístico que o Supervisor usa em dispatchNextAction:
-    // `${contentId}_${state}` — onde state é o estado atual da unit antes da retentativa.
-    // O BullMQ proíbe ':' em jobId customizados, por isso usamos '_'.
-    const deterministicJobId = `${contentId}_${unit.state}`;
-    const existingJob = await queue.getJob(deterministicJobId);
-    if (existingJob) {
-      const existingState = await existingJob.getState();
-      console.log(`[Retry] Removendo job existente ${deterministicJobId} (estado BullMQ: ${existingState}) antes de reenfileirar.`);
-      await existingJob.remove();
+    // ── 1. Autenticação ────────────────────────────────────────────────────
+    const token = req.headers.get('x-operator-token');
+    if (!process.env.MISSION_CONTROL_OPERATOR_TOKEN) {
+      return NextResponse.json({ error: 'MISSION_CONTROL_OPERATOR_TOKEN não configurado no servidor.' }, { status: 500 });
+    }
+    if (token !== process.env.MISSION_CONTROL_OPERATOR_TOKEN) {
+      return NextResponse.json({ error: 'Token de operador inválido.' }, { status: 401 });
     }
 
-    await queue.add(jobName, {
-      contentId,
-      channelId: unit.channel_id,
-      topic: unit.topic,
-      manualRetry: true,
-      operatorReason: reason.trim(),
-      // rollback: o worker/Supervisor decide a partir do targetState declarado,
-      // recomputando o que precisa — nunca escrevemos `state` daqui.
-      requestedTargetState: action === 'rollback' ? targetState : undefined,
-    }, {
-      jobId: deterministicJobId, // ← determinístico, rastreável pelo reconciliador
-    });
-  } finally {
-    await queue.close();
-  }
+    // ── 2. Validação do corpo ──────────────────────────────────────────────
+    let body: RetryBody;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+    }
+    const { contentId, currentState, action, targetState, reason } = body ?? {};
+    if (!contentId || !currentState || !action || !reason || reason.trim().length < 5) {
+      return NextResponse.json(
+        { error: 'Campos obrigatórios: contentId, currentState, action, reason (mín. 5 caracteres).' },
+        { status: 400 }
+      );
+    }
 
-  const targetLabel = action === 'rollback' ? STATES[targetState!]?.label : STATES[unit.state]?.label;
-  return NextResponse.json({
-    ok: true,
-    message: `Evento enfileirado em "${check.queue}" (${jobName}) para ${targetLabel}. Auditoria registrada.`,
-  });
+    // ── 3. Estado real no banco (o cliente pode estar defasado) ────────────
+    const { rows } = await pool.query(
+      'SELECT id, state, channel_id, topic, metadata FROM content_units WHERE id = $1',
+      [contentId]
+    );
+    if (rows.length === 0) {
+      return NextResponse.json({ error: `Unit ${contentId} não existe.` }, { status: 404 });
+    }
+    const unit = rows[0];
+    if (unit.state !== currentState) {
+      return NextResponse.json(
+        { error: `Estado defasado: o painel mostra ${currentState}, mas a unit está em ${unit.state}. Recarregue.` },
+        { status: 409 }
+      );
+    }
+
+    // ── 4. Transição válida? ───────────────────────────────────────────────
+    const check = isValidManualAction(unit.state, action, targetState);
+    if (!check.ok || !check.queue) {
+      return NextResponse.json({ error: check.reason ?? 'Ação inválida para este estado.' }, { status: 422 });
+    }
+
+    // ── 5. Auditoria ANTES da ação (regra de operações manuais) ────────────
+    const auditEntry = {
+      at: new Date().toISOString(),
+      action,
+      fromState: unit.state,
+      toState: action === 'rollback' ? targetState : unit.state,
+      queue: check.queue,
+      reason: reason.trim(),
+      via: 'mission-control',
+    };
+    await pool.query(
+      `UPDATE content_units
+         SET metadata = jsonb_set(
+           COALESCE(metadata, '{}'::jsonb),
+           '{operatorActions}',
+           COALESCE(metadata->'operatorActions', '[]'::jsonb) || $2::jsonb,
+           true
+         )
+       WHERE id = $1`,
+      [contentId, JSON.stringify(auditEntry)]
+    );
+
+    // ── 6. Injeção do EVENTO na fila correspondente ────────────────────────
+    const JOB_NAME_BY_QUEUE: Record<string, string> = {
+      editorial: 'evaluate',
+      research: 'research',
+      script: 'write_script',
+      critic: 'review_script',
+      storyboard: 'plan_storyboard',
+      media: 'generate_media',
+      render: 'render_video',
+      quality: 'qc_video',
+      'cinematic-review': 'review_cinematic',
+      publisher: 'publish',
+    };
+    const jobName = JOB_NAME_BY_QUEUE[check.queue] ?? 'retry';
+
+    const queue = getQueue(check.queue, unit.channel_id);
+    let jobIdToUse = `${contentId}_${unit.state}`;
+    try {
+      const existingJob = await queue.getJob(jobIdToUse);
+      if (existingJob) {
+        try {
+          const existingState = await existingJob.getState();
+          console.log(`[Retry] Removendo job existente ${jobIdToUse} (estado BullMQ: ${existingState}) antes de reenfileirar.`);
+          await existingJob.remove();
+        } catch (removeErr: any) {
+          console.warn(`[Retry] Aviso: Job ${jobIdToUse} não pôde ser removido (ex: ativo/trava de worker): ${removeErr.message}. Gerando sufixo de timestamp.`);
+          jobIdToUse = `${jobIdToUse}_${Date.now()}`;
+        }
+      }
+
+      await queue.add(jobName, {
+        contentId,
+        channelId: unit.channel_id,
+        topic: unit.topic,
+        manualRetry: true,
+        operatorReason: reason.trim(),
+        requestedTargetState: action === 'rollback' ? targetState : undefined,
+      }, {
+        jobId: jobIdToUse,
+      });
+    } finally {
+      await queue.close();
+    }
+
+    const targetLabel = action === 'rollback' ? STATES[targetState!]?.label : STATES[unit.state]?.label;
+    return NextResponse.json({
+      ok: true,
+      message: `Evento enfileirado em "${check.queue}" (${jobName}) para ${targetLabel}. Auditoria registrada.`,
+    });
+  } catch (err: any) {
+    console.error('[Retry API Error]', err);
+    return NextResponse.json(
+      { error: err.message || String(err) },
+      { status: 500 }
+    );
+  }
 }
