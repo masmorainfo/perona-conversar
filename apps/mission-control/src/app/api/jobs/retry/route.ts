@@ -109,11 +109,11 @@ export async function POST(req: NextRequest) {
         `UPDATE content_units
            SET state = $2,
                updated_at = NOW(),
-               metadata = jsonb_set(
-                 COALESCE(metadata, '{}'::jsonb),
-                 '{operatorActions}',
-                 COALESCE(metadata->'operatorActions', '[]'::jsonb) || $3::jsonb,
-                 true
+               metadata = (
+                 COALESCE(metadata, '{}'::jsonb) - 'queueErrorReason' - 'queueErrorAt' - 'queueErrorFrom' - 'queueErrorSource'
+               ) || jsonb_build_object(
+                 'operatorActions',
+                 COALESCE(metadata->'operatorActions', '[]'::jsonb) || $3::jsonb
                )
          WHERE id = $1`,
         [contentId, newDbState, JSON.stringify(auditEntry)]
