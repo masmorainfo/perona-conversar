@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   // ── 3. Estado real no banco (o cliente pode estar defasado) ────────────
   const { rows } = await pool.query(
-    'SELECT id, state, channel_id, metadata FROM content_units WHERE id = $1',
+    'SELECT id, state, channel_id, topic, metadata FROM content_units WHERE id = $1',
     [contentId]
   );
   if (rows.length === 0) {
@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
     await queue.add(jobName, {
       contentId,
       channelId: unit.channel_id,
+      topic: unit.topic,
       manualRetry: true,
       operatorReason: reason.trim(),
       // rollback: o worker/Supervisor decide a partir do targetState declarado,
