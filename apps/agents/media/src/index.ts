@@ -93,7 +93,6 @@ async function processMediaJob(job: Job<MediaJobData>) {
   }
 
   const manifest = JSON.parse(fs.readFileSync(storyManifestPath, 'utf-8'));
-  const assetsDir = path.resolve(process.cwd(), `../../../tmp/assets/${contentId}`);
 
   // Executa a síntese física real (imagens e locução)
   const { manifest: synthesizedManifest, assetUrls } = await memoryProvider.synthesizeAssets(
