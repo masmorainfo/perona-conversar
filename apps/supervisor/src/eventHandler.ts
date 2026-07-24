@@ -314,16 +314,26 @@ export async function processEvent(
         queueErrorAt: new Date().toISOString()
       };
 
-      await persistTransition(
-        pool,
-        contentId,
-        nextStateValue as ContentState,
-        'QUEUE_ERROR',
-        'Supervisor',
-        `Queue enqueue failed: ${queueErrorReason}`,
-        queueErrorMetadata,
-        newState.context.attemptCounts as any
-      );
+      // Wrapping persistTransition in its own try/catch so a secondary DB failure
+      // (e.g. missing enum value — now fixed by migration 019) never engulfs the
+      // original dispatch error. The unit always becomes visible as QUEUE_ERROR
+      // when possible; if the persist itself fails, we log it but still re-throw
+      // the original error.
+      try {
+        await persistTransition(
+          pool,
+          contentId,
+          nextStateValue as ContentState,
+          'QUEUE_ERROR',
+          'Supervisor',
+          `Queue enqueue failed: ${queueErrorReason}`,
+          queueErrorMetadata,
+          newState.context.attemptCounts as any
+        );
+        console.log(`[Supervisor] ✅ Unit ${contentId} marcada como QUEUE_ERROR no banco.`);
+      } catch (persistErr: any) {
+        console.error(`[Supervisor] ❌ Falha ao salvar QUEUE_ERROR para unit ${contentId}: ${persistErr.message}. Unit ficará visualmente presa em ${nextStateValue}.`);
+      }
       
       throw err;
     }

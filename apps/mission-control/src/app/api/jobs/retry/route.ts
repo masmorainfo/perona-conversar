@@ -131,6 +131,20 @@ export async function POST(req: NextRequest) {
 
   const queue = getQueue(check.queue, unit.channel_id);
   try {
+    // Usar o mesmo jobId determinístico que o Supervisor usa em dispatchNextAction:
+    // `${contentId}:${state}` — onde state é o estado atual da unit antes da retentativa.
+    // Isso garante que:
+    // 1. O reconciliador continue encontrando o job pelo ID esperado.
+    // 2. Se um job com o mesmo ID já existir (estado travado), ele é removido antes de
+    //    um novo ser adicionado — tornando o retry idempotente.
+    const deterministicJobId = `${contentId}:${unit.state}`;
+    const existingJob = await queue.getJob(deterministicJobId);
+    if (existingJob) {
+      const existingState = await existingJob.getState();
+      console.log(`[Retry] Removendo job existente ${deterministicJobId} (estado BullMQ: ${existingState}) antes de reenfileirar.`);
+      await existingJob.remove();
+    }
+
     await queue.add(jobName, {
       contentId,
       channelId: unit.channel_id,
@@ -139,6 +153,8 @@ export async function POST(req: NextRequest) {
       // rollback: o worker/Supervisor decide a partir do targetState declarado,
       // recomputando o que precisa — nunca escrevemos `state` daqui.
       requestedTargetState: action === 'rollback' ? targetState : undefined,
+    }, {
+      jobId: deterministicJobId, // ← determinístico, rastreável pelo reconciliador
     });
   } finally {
     await queue.close();

@@ -42,20 +42,25 @@ function getExpectedQueueForState(state: ContentState): string | null {
 }
 
 export function startReconciler(pool: any) {
-  // Run every 10 minutes
+  const INTERVAL_MS = 10 * 60 * 1000;
+  console.log(`[Supervisor Reconciler] ✅ Iniciado. Ciclo a cada ${INTERVAL_MS / 60000} min. Primeiro ciclo em 10s.`);
+
   setInterval(async () => {
     try {
       await runReconciliation(pool);
     } catch (err) {
-      console.error('[Supervisor Reconciler] Error during run:', err);
+      console.error('[Supervisor Reconciler] ❌ Erro fatal no ciclo:', err);
     }
-  }, 10 * 60 * 1000);
-  
+  }, INTERVAL_MS);
+
   // Run once on startup after a small delay
-  setTimeout(() => runReconciliation(pool).catch(console.error), 10 * 1000);
+  setTimeout(() => runReconciliation(pool).catch(err => {
+    console.error('[Supervisor Reconciler] ❌ Erro no ciclo inicial (boot):', err);
+  }), 10 * 1000);
 }
 
 async function runReconciliation(pool: any) {
+  const cycleStart = new Date().toISOString();
   const processableStates = [
     'EVALUATED', 'APPROVED', 'RESEARCHED', 'REVISED', 'SCRIPTED', 
     'CRITIC_OK', 'STORYBOARD_PLANNED', 'PRODUCED', 'RENDERED', 
@@ -70,7 +75,11 @@ async function runReconciliation(pool: any) {
   `;
   
   const { rows } = await pool.query(query, [processableStates]);
-  
+  console.log(`[Supervisor Reconciler] 🔍 Ciclo iniciado em ${cycleStart}. Units varridas (>15min paradas): ${rows.length}.`);
+
+  let limbosFound = 0;
+  let errorsFound = 0;
+
   for (const unit of rows) {
     const state = unit.state as ContentState;
     const queueType = getExpectedQueueForState(state);
@@ -82,7 +91,8 @@ async function runReconciliation(pool: any) {
     try {
       const job = await queue.getJob(jobId);
       if (!job) {
-        console.warn(`[Supervisor Reconciler] 🚨 Limbo detected for unit ${unit.id} in state ${state}. Job ${jobId} not found in queue ${queueType}. Marking as QUEUE_ERROR.`);
+        limbosFound++;
+        console.warn(`[Supervisor Reconciler] 🚨 Limbo detectado: unit ${unit.id} em estado ${state} há >15min. Job ${jobId} ausente na fila '${queueType}'. Marcando QUEUE_ERROR.`);
         
         const metadata = typeof unit.metadata === 'string' ? JSON.parse(unit.metadata) : unit.metadata;
         const attemptCounts = typeof unit.attempt_counts === 'string' ? JSON.parse(unit.attempt_counts) : unit.attempt_counts;
@@ -91,7 +101,7 @@ async function runReconciliation(pool: any) {
           ...(metadata || {}),
           queueErrorFrom: state,
           queueErrorSource: 'reconciler',
-          queueErrorReason: `Job ${jobId} not found in BullMQ after 15 minutes in state ${state}`,
+          queueErrorReason: `Job ${jobId} não encontrado no BullMQ após 15 minutos no estado ${state}`,
           queueErrorAt: new Date().toISOString()
         };
 
@@ -105,9 +115,15 @@ async function runReconciliation(pool: any) {
           queueErrorMetadata,
           attemptCounts
         );
+      } else {
+        const jobState = await job.getState();
+        console.log(`[Supervisor Reconciler]   ↳ Unit ${unit.id} (${state}): job encontrado na fila '${queueType}', estado BullMQ = '${jobState}'.`);
       }
     } catch (err) {
-      console.error(`[Supervisor Reconciler] Error checking job for unit ${unit.id}:`, err);
+      errorsFound++;
+      console.error(`[Supervisor Reconciler] ❌ Erro ao verificar job da unit ${unit.id} (${state}):`, err);
     }
   }
+
+  console.log(`[Supervisor Reconciler] ✅ Ciclo concluído. Varridas: ${rows.length}, Limbos: ${limbosFound}, Erros: ${errorsFound}.`);
 }
