@@ -473,7 +473,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
   const defaultJobOpts = {
     jobId: `${contentId}_${state}`,
     removeOnComplete: true,
-    removeOnFail: true
+    removeOnFail: { count: 5000 }
   };
 
   switch (state) {
@@ -611,7 +611,7 @@ async function dispatchNextAction(pool: any, state: ContentState, context: Conte
           }, {
             jobId: `${contentId}:${state}:${platform}`,
             removeOnComplete: true,
-            removeOnFail: true
+            removeOnFail: { count: 5000 }
           });
         }
       } catch (err) {
