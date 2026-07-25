@@ -436,9 +436,9 @@ Responda SOMENTE com JSON:
       }
     }
 
-    // Mock: always 1536 dims to match pgvector column definition in the DB
-    // (even when using NVIDIA NIM, the DB stores embeddings in 1536-dim format)
-    const dims = 1536;
+    // Mock: always 1024 dims to match pgvector column definition in the DB
+    // (matches NVIDIA nv-embedqa-e5-v5 which produces 1024-dimensional embeddings)
+    const dims = 1024;
     return Array.from({ length: dims }, (_, i) => Math.sin(i));
   }
 

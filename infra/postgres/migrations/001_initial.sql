@@ -110,7 +110,7 @@ CREATE TABLE world_knowledge (
   entity_name       TEXT NOT NULL,
   facts             JSONB NOT NULL DEFAULT '{}',
   sources           JSONB NOT NULL DEFAULT '[]',
-  embedding         vector(1536),               -- OpenAI text-embedding-3-small
+  embedding         vector(1024),               -- NVIDIA nv-embedqa-e5-v5 (1024-dimensional)
   last_verified_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at        TIMESTAMPTZ,                -- NULL = não expira
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
