@@ -37,6 +37,31 @@ const MAX_TIME_WITHOUT_TRIGGER_MS = 2 * 60 * 60 * 1000; // 2 horas
 
 const DYNAMIC_SCORE_THRESHOLD = 80;
 
+// Estados terminais — mesma lista do cycle-clock. Uma unit em qualquer outro
+// estado significa produção ativa no canal e bloqueia a injeção de nova unit.
+// Nota intencional: QUEUE_ERROR não é terminal — uma unit nesse estado bloqueia
+// o canal até retry manual (via Mission Control) ou abandono automático pelo
+// StalenessGuard em 48h, igual ao comportamento do cycle-clock.
+const TERMINAL_STATES = [
+  'PUBLISHED',
+  'PUBLISHED_PARTIAL',
+  'ANALYZED',
+  'LEARNED',
+  'REJECTED',
+  'ABANDONED',
+  'DEFERRED',
+  'FAILED_QA',
+];
+
+async function isChannelBusy(channelId: string): Promise<boolean> {
+  const placeholders = TERMINAL_STATES.map((_, i) => `$${i + 2}`).join(', ');
+  const { rows } = await pool.query(
+    `SELECT id FROM content_units WHERE channel_id = $1 AND state NOT IN (${placeholders}) LIMIT 1`,
+    [channelId, ...TERMINAL_STATES]
+  );
+  return rows.length > 0;
+}
+
 async function processSignal(job: Job) {
   const lastTriggerStr = await redisClient.get('scheduler:last_opportunity_trigger');
   const lastTriggerTime = lastTriggerStr ? parseInt(lastTriggerStr, 10) : 0;
@@ -82,6 +107,7 @@ async function evaluateOpportunities() {
 
     const now = Date.now();
     const scoringStrategy = new DefaultScoringStrategy();
+    const busyByChannel = new Map<string, boolean>();
 
     for (const opp of opportunities) {
       const createdAt = new Date(opp.created_at).getTime();
@@ -95,6 +121,24 @@ async function evaluateOpportunities() {
       const dynamicScore = scoringStrategy.calculateScore(opp.base_score, factors, createdAt, now);
 
       if (dynamicScore >= DYNAMIC_SCORE_THRESHOLD) {
+        // Guard de concorrência por canal (mesma regra do cycle-clock):
+        // sem isso, este loop de 60s injeta units sem freio — foi o caminho
+        // da enchente de 07-09/07 (2.334 units em 3 dias).
+        let busy = busyByChannel.get(opp.channel_id);
+        if (busy === undefined) {
+          busy = await isChannelBusy(opp.channel_id);
+          busyByChannel.set(opp.channel_id, busy);
+        }
+        if (busy) {
+          console.log(`[Scheduler] ⏸ Canal ${opp.channel_id} ocupado — "${opp.title}" mantida PENDING (Score: ${dynamicScore.toFixed(2)}).`);
+          await pool.query(
+            `UPDATE content_opportunities SET dynamic_score = $1, updated_at = NOW() WHERE id = $2`,
+            [dynamicScore, opp.id]
+          );
+          continue;
+        }
+        busyByChannel.set(opp.channel_id, true);
+
         console.log(`[Scheduler] 🌟 Oportunidade promovida para QUEUED: "${opp.title}" (Score: ${dynamicScore.toFixed(2)})`);
         await pool.query(
           `UPDATE content_opportunities SET dynamic_score = $1, status = 'QUEUED', updated_at = NOW() WHERE id = $2`,

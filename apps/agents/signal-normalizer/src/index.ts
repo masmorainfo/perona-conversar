@@ -204,7 +204,10 @@ async function processRawSignal(job: Job<RawSignalJobData>) {
 async function bootstrap() {
   console.log('🚀 Iniciando Signal Normalizer Worker (CLP — Content Localization Policy)...');
 
-  const worker = new Worker(RAW_SIGNALS_QUEUE, processRawSignal, { connection, concurrency: 5, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
+  // concurrency deve ser >= BATCH_SIZE: cada job aguarda o flush do seu batch,
+  // então com concurrency < BATCH_SIZE o batch nunca enche e cada chamada LLM
+  // localiza só `concurrency` itens em vez de BATCH_SIZE (vazão ~6x menor).
+  const worker = new Worker(RAW_SIGNALS_QUEUE, processRawSignal, { connection, concurrency: BATCH_SIZE, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } });
 
   worker.on('ready', () => {
     console.log(`✅ Ouve fila: ${RAW_SIGNALS_QUEUE}`);
