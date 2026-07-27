@@ -37,6 +37,23 @@ const MAX_TIME_WITHOUT_TRIGGER_MS = 2 * 60 * 60 * 1000; // 2 horas
 
 const DYNAMIC_SCORE_THRESHOLD = 80;
 
+// Teto de produção por dia por canal (units criadas, não oportunidades avaliadas).
+// Default 3 — ritmo alvo do canal. O guard de canal ocupado impede concorrência,
+// mas sozinho não limita quantas rodam em sequência num único dia; este teto
+// impede o scheduler de "queimar" um backlog inteiro de PENDING em poucas horas
+// (foi o que aconteceu em 27/07: 23 PENDING teriam sido promovidas uma atrás da
+// outra, sem respeitar o ritmo pretendido de CYCLE_MAX_OPPORTUNITIES_PER_CHANNEL).
+const DAILY_PRODUCTION_CAP = parseInt(process.env.SCHEDULER_DAILY_PRODUCTION_CAP ?? '3', 10);
+
+async function unitsProducedToday(channelId: string): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT count(*)::int AS n FROM content_units
+     WHERE channel_id = $1 AND created_at::date = CURRENT_DATE`,
+    [channelId]
+  );
+  return rows[0]?.n ?? 0;
+}
+
 // Estados terminais — mesma lista do cycle-clock. Uma unit em qualquer outro
 // estado significa produção ativa no canal e bloqueia a injeção de nova unit.
 // Nota intencional: QUEUE_ERROR não é terminal — uma unit nesse estado bloqueia
@@ -108,6 +125,7 @@ async function evaluateOpportunities() {
     const now = Date.now();
     const scoringStrategy = new DefaultScoringStrategy();
     const busyByChannel = new Map<string, boolean>();
+    const dailyCountByChannel = new Map<string, number>();
 
     for (const opp of opportunities) {
       const createdAt = new Date(opp.created_at).getTime();
@@ -121,6 +139,24 @@ async function evaluateOpportunities() {
       const dynamicScore = scoringStrategy.calculateScore(opp.base_score, factors, createdAt, now);
 
       if (dynamicScore >= DYNAMIC_SCORE_THRESHOLD) {
+        // Teto diário de produção (units criadas hoje, não oportunidades avaliadas):
+        // sem isso, um backlog grande de PENDING é promovido inteiro em sequência
+        // assim que o canal libera a cada terminal, ignorando o ritmo pretendido
+        // (achado em 27/07: 23 PENDING seriam disparadas uma atrás da outra).
+        let dailyCount = dailyCountByChannel.get(opp.channel_id);
+        if (dailyCount === undefined) {
+          dailyCount = await unitsProducedToday(opp.channel_id);
+          dailyCountByChannel.set(opp.channel_id, dailyCount);
+        }
+        if (dailyCount >= DAILY_PRODUCTION_CAP) {
+          console.log(`[Scheduler] 🛑 Canal ${opp.channel_id} atingiu o teto diário de produção (${dailyCount}/${DAILY_PRODUCTION_CAP}) — "${opp.title}" mantida PENDING (Score: ${dynamicScore.toFixed(2)}).`);
+          await pool.query(
+            `UPDATE content_opportunities SET dynamic_score = $1, updated_at = NOW() WHERE id = $2`,
+            [dynamicScore, opp.id]
+          );
+          continue;
+        }
+
         // Guard de concorrência por canal (mesma regra do cycle-clock):
         // sem isso, este loop de 60s injeta units sem freio — foi o caminho
         // da enchente de 07-09/07 (2.334 units em 3 dias).
@@ -138,6 +174,7 @@ async function evaluateOpportunities() {
           continue;
         }
         busyByChannel.set(opp.channel_id, true);
+        dailyCountByChannel.set(opp.channel_id, dailyCount + 1);
 
         console.log(`[Scheduler] 🌟 Oportunidade promovida para QUEUED: "${opp.title}" (Score: ${dynamicScore.toFixed(2)})`);
         await pool.query(
