@@ -49,6 +49,24 @@ const CTA_PATTERNS: RegExp[] = [
  * Lança um erro descritivo se detectar qualquer violação.
  * O Critic Agent captura esse erro e aciona retentativa automática.
  */
+// Teto de duração: canal ainda não monetizado no TikTok, vídeo não deve
+// passar de 60s. Achado em 27/07: nada no sistema validava isso — o LLM
+// gerava 90-170s livremente, e o roteiro só chegava a ser rejeitado (se
+// chegasse) depois de storyboard+media+render já terem custado o pipeline
+// inteiro. Falhar aqui, antes de research→critic→storyboard, é o ponto
+// mais barato possível pra rejeitar.
+const MAX_DURATION_SECONDS = parseInt(process.env.SCRIPT_MAX_DURATION_SECONDS ?? '60', 10);
+
+function assertDurationLimit(script: Script, context: string = 'unknown'): void {
+  const total = script.estimatedDurationSeconds ?? script.body.reduce((acc, s) => acc + s.durationSeconds, 0);
+  if (total > MAX_DURATION_SECONDS) {
+    throw new Error(
+      `[Duration Guard] Roteiro excede o limite de ${MAX_DURATION_SECONDS}s (tentativa: ${context}): ` +
+      `duração estimada = ${total}s. Canal ainda não monetizado — vídeos devem ter no máximo ${MAX_DURATION_SECONDS}s.`
+    );
+  }
+}
+
 function assertNoCTA(script: Script, context: string = 'unknown'): void {
   const candidates: { field: string; text: string }[] = [
     { field: 'hook', text: script.hook },
@@ -194,19 +212,28 @@ async function processScriptJob(job: Job<ScriptJobData>) {
   }
 
   prompt += `
+    ── LIMITE DE DURAÇÃO — REGRA INVIOLÁVEL ────────────────────────────────────
+    O canal ainda NÃO é monetizado no TikTok. A duração TOTAL do vídeo
+    (hook + soma de todas as seções do body + cta) DEVE ficar entre 25 e 60
+    segundos. NUNCA exceda 60 segundos. Isso significa: hook curto (5-10s),
+    2 a 3 seções de body no máximo (10-20s cada), cta curto (5-10s).
+    Corte informação antes de cortar clareza — prefira menos fatos bem
+    contados a todos os fatos amontoados.
+    ─────────────────────────────────────────────────────────────────────────────
+
     Responda APENAS com um objeto JSON válido neste formato:
     {
       "title": "Título sugerido para o vídeo",
-      "hook": "Abertura que prende a atenção nos primeiros 15s",
+      "hook": "Abertura que prende a atenção nos primeiros 8s",
       "body": [
-        { "content": "texto da seção 1", "durationSeconds": 30, "visualNote": "ideia visual 1" },
-        { "content": "texto da seção 2", "durationSeconds": 45, "visualNote": "ideia visual 2" }
+        { "content": "texto da seção 1", "durationSeconds": 18, "visualNote": "ideia visual 1" },
+        { "content": "texto da seção 2", "durationSeconds": 18, "visualNote": "ideia visual 2" }
       ],
       "cta": "Reflexão final ou pergunta retórica — NUNCA um pedido de like, inscrição, compartilhamento ou comentário (Canon: KAIRO não pede, KAIRO entrega)",
-      "estimatedDurationSeconds": 90,
+      "estimatedDurationSeconds": 44,
       "keywords": ["exatamente 4 hashtags relevantes para o TikTok, sem o caractere #, ex: futebol, copa, historia, kairo"]
     }
-    
+
     REGRA INVIOLÁVEL — CANON: "KAIRO não pede, KAIRO entrega."
     Jamais inclua no roteiro (hook, body ou cta) qualquer variante de:
     - "curta", "dê um like", "aperta o like"
@@ -237,6 +264,10 @@ async function processScriptJob(job: Job<ScriptJobData>) {
     generatedAt: new Date(),
     version: attemptNumber,
   };
+
+  // ─── Duration Guard (pré-humanizer) ────────────────────────────────────────
+  assertDurationLimit(script, `tentativa-${attemptNumber}`);
+  console.log(`[Script Agent] ✅ Duration Guard: ${script.estimatedDurationSeconds}s (limite: ${MAX_DURATION_SECONDS}s).`);
 
   // ─── Anti-CTA Guard (pré-humanizer) ───────────────────────────────────────
   // Rejeita o roteiro imediatamente se o LLM violou o Canon — sem custo extra.

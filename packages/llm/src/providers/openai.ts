@@ -576,28 +576,18 @@ Responda SOMENTE com JSON:
       console.error('[TTS] Edge-TTS failed, falling back to silent mock:', err);
     }
 
-    // 4. Last resort: silent WAV mock
-    console.warn('[TTS] ⚠️ Using silent mock audio — no TTS engine available');
-    const sampleRate = 8000;
-    const duration = 5; // seconds
-    const numSamples = sampleRate * duration;
-    const wavBuffer = Buffer.alloc(44 + numSamples);
-    wavBuffer.write('RIFF', 0);
-    wavBuffer.writeUInt32LE(36 + numSamples, 4);
-    wavBuffer.write('WAVE', 8);
-    wavBuffer.write('fmt ', 12);
-    wavBuffer.writeUInt32LE(16, 16);
-    wavBuffer.writeUInt16LE(1, 20);
-    wavBuffer.writeUInt16LE(1, 22);
-    wavBuffer.writeUInt32LE(sampleRate, 24);
-    wavBuffer.writeUInt32LE(sampleRate, 28);
-    wavBuffer.writeUInt16LE(1, 32);
-    wavBuffer.writeUInt16LE(8, 34);
-    wavBuffer.write('data', 36);
-    wavBuffer.writeUInt32LE(numSamples, 40);
-    wavBuffer.fill(128, 44);
-    await fs.promises.writeFile(outputPath, wavBuffer);
-    return outputPath;
+    // 4. Todos os provedores de TTS falharam.
+    // Antes: gerava um WAV silencioso de 5s como placeholder. Isso passava por
+    // toda a pipeline (storyboard, media, render — cara e lenta) sem erro
+    // algum, e só era pego no fim pelo QC de áudio como "silêncio contínuo"
+    // (achado em 27/07: 2 de 2 vídeos falharam exatamente com ~4-5s de
+    // silêncio, batendo com esta duração hardcoded). Falhar aqui é mais
+    // barato — aborta antes do render caro — e visível — o job cai como
+    // failed na fila 'media' em vez de um QC misterioso depois do render.
+    // Mesmo princípio já aplicado ao roteiro: não mockar silenciosamente.
+    throw new Error(
+      `[TTS] Todos os provedores de voz falharam (ElevenLabs, OpenAI TTS, Edge-TTS). Não é permitido substituir por áudio silencioso mock.`
+    );
   }
 
   async generateImage(prompt: string, outputPath: string): Promise<string> {

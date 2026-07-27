@@ -49,11 +49,11 @@ async function processRenderJob(job: Job<RenderJobData>) {
   const qaResult = await runAudioQA(videoFilePath);
 
   if (qaResult.failed) {
-    console.error(`[Render Engine] 🚨 Falha técnica no áudio (silêncio bloqueante >= 1s). Max silêncio: ${qaResult.maxSilenceDuration}s`);
+    console.error(`[Render Engine] 🚨 Falha técnica no áudio (silêncio bloqueante >= 2.5s). Max silêncio: ${qaResult.maxSilenceDuration}s`);
     await supervisorQueue.add('QA_FAIL_DETERMINISTIC', {
       contentId,
       channelId,
-      reason: `Falha na verificação técnica de áudio: silêncio de ${qaResult.maxSilenceDuration.toFixed(2)}s contínuo. Limite: 1.0s (-40dB).`
+      reason: `Falha na verificação técnica de áudio: silêncio de ${qaResult.maxSilenceDuration.toFixed(2)}s contínuo. Limite bloqueante: 2.5s (-40dB).`
     });
     return; // Aborta e não envia RENDER_RESULT
   }
