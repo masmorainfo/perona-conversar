@@ -90,10 +90,21 @@ async function runReconciliation(pool: any) {
     
     try {
       const job = await queue.getJob(jobId);
-      if (!job) {
+      const jobState = job ? await job.getState() : null;
+
+      // Dois tipos de "job perdido": ausente da fila (limbo clássico) OU
+      // presente mas já falhou (achado em 27/07 — job de render crashou em
+      // 8s, ficou 329min sem ninguém notar porque só o caso `!job` era
+      // tratado; um job 'failed' continua existindo no Redis por causa de
+      // removeOnFail:{count:5000}, então `!job` nunca era true pra esse caso).
+      const isMissing = !job;
+      const isDeadFailed = jobState === 'failed';
+
+      if (isMissing || isDeadFailed) {
         limbosFound++;
-        console.warn(`[Supervisor Reconciler] 🚨 Limbo detectado: unit ${unit.id} em estado ${state} há >15min. Job ${jobId} ausente na fila '${queueType}'. Marcando QUEUE_ERROR.`);
-        
+        const reasonLabel = isMissing ? 'ausente na fila' : `com status 'failed' (${job!.failedReason ?? 'sem motivo registrado'})`;
+        console.warn(`[Supervisor Reconciler] 🚨 Limbo detectado: unit ${unit.id} em estado ${state} há >15min. Job ${jobId} ${reasonLabel} '${queueType}'. Marcando QUEUE_ERROR.`);
+
         const metadata = typeof unit.metadata === 'string' ? JSON.parse(unit.metadata) : unit.metadata;
         const attemptCounts = typeof unit.attempt_counts === 'string' ? JSON.parse(unit.attempt_counts) : unit.attempt_counts;
 
@@ -101,7 +112,9 @@ async function runReconciliation(pool: any) {
           ...(metadata || {}),
           queueErrorFrom: state,
           queueErrorSource: 'reconciler',
-          queueErrorReason: `Job ${jobId} não encontrado no BullMQ após 15 minutos no estado ${state}`,
+          queueErrorReason: isMissing
+            ? `Job ${jobId} não encontrado no BullMQ após 15 minutos no estado ${state}`
+            : `Job ${jobId} falhou no BullMQ (${job!.failedReason ?? 'sem motivo registrado'}) e ficou >15 minutos sem transição no estado ${state}`,
           queueErrorAt: new Date().toISOString()
         };
 
@@ -111,12 +124,11 @@ async function runReconciliation(pool: any) {
           state,
           'QUEUE_ERROR',
           'agent:reconciler',
-          `Limbo reconciliation: Job missing`,
+          isMissing ? `Limbo reconciliation: Job missing` : `Limbo reconciliation: Job failed`,
           queueErrorMetadata,
           attemptCounts
         );
       } else {
-        const jobState = await job.getState();
         console.log(`[Supervisor Reconciler]   ↳ Unit ${unit.id} (${state}): job encontrado na fila '${queueType}', estado BullMQ = '${jobState}'.`);
       }
     } catch (err) {
