@@ -14,8 +14,11 @@ import { fileURLToPath } from 'url';
 // Cobre PT-BR (primário) e EN (fallback). Case-insensitive.
 const CTA_PATTERNS: RegExp[] = [
   // Pedidos de like / curtida
+  // Nota: "curta" sozinho é falso positivo comum (ex: "carreira curta" —
+  // achado em 27/07, derrubou um roteiro válido). Exige contexto de CTA
+  // próximo (vídeo/aqui/aí/post) pra distinguir do adjetivo "curto/breve".
   /d[eê]\s*(um|um)\s*like/i,
-  /cur[ta]+/i,
+  /\bcurt(e|a|ir)\b[^.!?]{0,25}\b(v[íi]deo|aqui|post|conte[úu]do|a[íi](?=\s|$|[.,!?]))/i,
   /aperta\s*o\s*(like|curtir)/i,
   // Pedidos de compartilhamento
   /compartilh[ea]/i,
