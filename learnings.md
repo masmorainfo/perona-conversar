@@ -38,6 +38,15 @@
 - Reversible: 3ee821f
 - Status: candidate
 
+### [2026-07-28] Atrito entre o gate técnico de QC de áudio e o design de pacing dramático do canal
+- Incident: Unit `85a6a0b5` (canal Kairo) falhou em `FAILED_QA` com "silêncio de 2.82s contínuo. Limite bloqueante: 2.5s" — diferente das duas falhas anteriores da mesma noite (5.31s e 4.25s, causadas por fallback de TTS silencioso, já corrigido). Investigação (sem fix, por decisão do operador) confirmou via `content_units.metadata->'storyManifestAudit'` que a unit tem 2 cenas `isSilence` por design (não falha de TTS — essas cenas nunca chamam `generateSpeech()`): cena índice 11 (1.5s, meio do vídeo, isolada) e cena índice 13 (2.0s, última cena do vídeo). Hipótese mais forte (não cravada — vídeo já não existe pra confirmar por amostragem): a pausa de 2.0s da última cena, somada a padding de encerramento/buffer da cena narrada anterior, ultrapassa o limite de 2.5s do QC.
+- Root cause: **decisão de produto pendente, não bug.** O QC de áudio (`apps/agents/render/src/audio-qa.ts`) roda cego — analisa só o arquivo de vídeo final via `ffmpeg silencedetect`, sem conhecer o manifest, então não distingue pausa dramática intencional de defeito real.
+- Achado colateral: `apps/agents/render/src/index.ts` descarta o array `warnings` do `runAudioQA()` (que tem timestamp "no trecho MM:SS" de cada silêncio) — só usa `maxSilenceDuration`. Hoje não dá pra saber ONDE no vídeo bateu o silêncio sem reconstruir manualmente pelo manifest, como foi feito aqui.
+- Duas opções levantadas, ambas pendentes de decisão do operador (nenhuma implementada):
+  (a) Afrouxar o teto de bloqueio do QC (hoje 2.5s) para acomodar pausas de até 2.0s + folga — risco: deixa passar silêncios defeituosos um pouco maiores também.
+  (b) Fazer o QC ler o manifest (ou dar folga segura às pausas de design abaixo de 2.5s) — mantém o teto rígido, mas exige mudança de arquitetura (QC hoje é intencionalmente "cego"/puramente técnico) ou encurtar a pausa dramática.
+- Status: candidate (pendente de decisão do operador — não corrigir sem definição explícita de qual caminho seguir)
+
 ## Consolidation (run periodically)
 - Proven recurrence (2–3x) → promote the rule into CLAUDE.md and mark the entry retired
 - Remove obsolete entries / ones referencing deleted files
