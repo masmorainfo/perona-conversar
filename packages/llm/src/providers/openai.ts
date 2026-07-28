@@ -307,13 +307,15 @@ export class OpenAIProvider implements LLMProvider, VoiceProvider, ImageProvider
         });
       }
       if (prompt.includes('Motor de Oportunidades') || prompt.includes('oportunidade editorial')) {
-        return JSON.stringify({
-          hasOpportunity: true,
-          title: "O Silêncio de Berlim: A Queda Trágica de Zidane",
-          description: "Com base nos sinais e retrospectivas sobre a final da Copa do Mundo de 2006, analisamos o momento dramático da cabeçada de Zidane em Materazzi e seu abandono do campo.",
-          score: 0.95,
-          sourceSignals: ["Zinedine Zidane 2006", "Documentário e retrospectivas"]
-        });
+        // Achado em 28/07: este mock ("O Silêncio de Berlim / Zidane 2006") vazou
+        // pra content_opportunities de verdade quando o LLM caiu em 09/07, ficou
+        // esquecido em status QUEUED por 19 dias, e foi promovido pelo cycle-clock
+        // como se fosse uma oportunidade real — sem nenhum raw_signal de origem.
+        // Nunca inventar oportunidade: sem provedor de LLM, o motor deve falhar
+        // e não gerar nada, não fabricar uma oportunidade falsa.
+        throw new Error(
+          `[LLM] Geração de oportunidade falhou com todos os provedores. Não é permitido inventar oportunidade mock/template.`
+        );
       }
       return '{}';
     }
