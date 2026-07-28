@@ -78,6 +78,22 @@ const STALENESS_THRESHOLD_HOURS = parseInt(
   10,
 );
 
+/**
+ * Idade máxima de uma content_opportunity em status QUEUED antes de ser
+ * considerada vencida e descartada em vez de promovida.
+ *
+ * Achado em 28/07: uma oportunidade QUEUED de 19 dias (gerada por um mock
+ * hardcoded quando o LLM caiu em 09/07) foi promovida pelo cron autônomo
+ * como se fosse um trend atual — sem nenhuma checagem de idade. Trend velho
+ * não vira notícia; se ninguém consumiu em 24h, o momento já passou.
+ *
+ * Default: 24h. Configurável via CYCLE_MAX_QUEUED_AGE_HOURS.
+ */
+const MAX_QUEUED_AGE_HOURS = parseInt(
+  process.env['CYCLE_MAX_QUEUED_AGE_HOURS'] ?? '24',
+  10,
+);
+
 // ─── Infraestrutura ────────────────────────────────────────────────────────────
 
 const { Pool } = pg;
@@ -280,20 +296,48 @@ async function runCycle(reason: 'scheduled' | 'startup'): Promise<CycleResult> {
       continue;
     }
 
-    // Busca oportunidades QUEUED para este canal, ordenadas por score descendente
-    const { rows: opportunities } = await pool.query<{
+    // Busca TODAS as oportunidades QUEUED do canal (sem LIMIT ainda) pra poder
+    // separar as vencidas das válidas antes de decidir o que despachar.
+    const { rows: allQueued } = await pool.query<{
       id: string;
       title: string;
       dynamic_score: number;
+      created_at: string;
     }>(
-      `SELECT id, title, dynamic_score
+      `SELECT id, title, dynamic_score, created_at
        FROM content_opportunities
        WHERE channel_id = $1 AND status = 'QUEUED'
-       ORDER BY dynamic_score DESC NULLS LAST, updated_at ASC
-       LIMIT $2`,
-      [channel.id, MAX_OPPORTUNITIES_PER_CHANNEL],
+       ORDER BY dynamic_score DESC NULLS LAST, updated_at ASC`,
+      [channel.id],
     );
 
+    // Guard de idade: trend de X horas atrás não é mais notícia. Achado em
+    // 28/07 — uma oportunidade de 19 dias (gerada por um mock que vazou quando
+    // o LLM caiu em 09/07) ficou esquecida em QUEUED e foi promovida pelo cron
+    // como se fosse atual, sem checagem de idade nenhuma.
+    const staleOpportunities = allQueued.filter(
+      (o) => Date.now() - new Date(o.created_at).getTime() > MAX_QUEUED_AGE_HOURS * 60 * 60 * 1000
+    );
+    const freshOpportunities = allQueued
+      .filter((o) => !staleOpportunities.includes(o))
+      .slice(0, MAX_OPPORTUNITIES_PER_CHANNEL);
+
+    for (const stale of staleOpportunities) {
+      const ageHours = (Date.now() - new Date(stale.created_at).getTime()) / (60 * 60 * 1000);
+      console.warn(
+        `[Cycle Clock]   ${channel.slug}: 🗑️ Oportunidade expirada (${ageHours.toFixed(1)}h > ${MAX_QUEUED_AGE_HOURS}h): "${stale.title}" — descartada, NÃO promovida.`
+      );
+      await pool.query(
+        `UPDATE content_opportunities
+         SET status = 'DISCARDED',
+             updated_at = NOW(),
+             description = '[EXPIRADA — ' || $2 || 'h em QUEUED, limite ' || $3 || 'h] ' || COALESCE(description, '')
+         WHERE id = $1`,
+        [stale.id, ageHours.toFixed(1), MAX_QUEUED_AGE_HOURS]
+      );
+    }
+
+    const opportunities = freshOpportunities;
     channelLog.opportunitiesFound = opportunities.length;
 
     if (opportunities.length === 0) {
